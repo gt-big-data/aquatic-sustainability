@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flood/Drought Prediction · Aquatic Sustainability</title>
+<link rel="stylesheet" href="/webpage/css/styles.css" />
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/webpage">
+<img src="/webpage/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+<span class="brand-title">Aquatic Sustainability</span>
+</a>
+<nav class="top-nav">
+<a class="active" href="/webpage/pages/flood-drought.html">Flood/Drought</a>
+<a href="/webpage/pages/oil-spill.html">Oil Spill</a>
+<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+</nav>
+</header>
+
+
+<main class="workspace">
+<!-- Sidebar: controls (mirrors UML side panel concept) -->
+<aside class="sidebar">
+<h2 class="sidebar-title">Controls</h2>
+<div class="control-group">
+<label for="regionSelect">Region</label>
+<select id="regionSelect">
+<option value="">Select a region…</option>
+<option>Gulf Coast</option>
+<option>California</option>
+<option>Great Lakes</option>
+<option>Custom (draw)</option>
+</select>
+</div>
+<div class="control-group">
+<label>Layers</label>
+<label class="checkbox"><input type="checkbox" id="layerFlood" checked> Flood risk</label>
+<label class="checkbox"><input type="checkbox" id="layerDrought" checked> Drought risk</label>
+<label class="checkbox"><input type="checkbox" id="layerAfford"> Water affordability</label>
+<label class="checkbox"><input type="checkbox" id="layerIncidents"> Incidents</label>
+</div>
+<div class="control-group">
+<label for="timeHorizon">Time horizon</label>
+<input type="range" id="timeHorizon" min="0" max="36" value="6" />
+<small><span id="timeHorizonLabel">6</span> months</small>
+</div>
+<button id="btnApply" class="btn">Apply</button>
+<button id="btnReset" class="btn btn-outline">Reset</button>
+</aside>
+
+
+<!-- Main: map canvas placeholder -->
+<section class="map-panel">
+<div id="map" class="map-canvas" aria-label="Map">
+<!-- Placeholder drawn by map.js until a real Maps API is integrated -->
+</div>
+</section>
+
+
+<!-- Right: annotation/results pane -->
+<aside class="details">
+<h2 class="sidebar-title">Annotations</h2>
+<div id="annotations" class="annotations">
+<p class="muted">Annotations will appear here (flood/drought vulnerability, affordability, incidents).</p>
+</div>
+</aside>
+</main>
+
+
+<footer class="site-footer">
+<small>Flood/Drought Prediction · Prototype</small>
+</footer>
+
+
+<script src="/webpage/js/map.js" defer></script>
+<script src="/webpage/js/pages/floodDrought.js" defer></script>
+</body>
+</html>
