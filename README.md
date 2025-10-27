@@ -4,6 +4,11 @@ Water has always been one of the most vital, yet alarmingly vulnerable, resource
 
 The primary goal of this multi-faceted project is to aggregate data from a combination of satellite imagery, historical datasets, and comma-separated value (CSV) files in order to build an interface that geolocates water-related vulnerabilities and inequities. It will be easy for global citizens and governments alike to mark an area with this tool and view watershed perturbations, extreme weather risks, and discrepancies in water access. As the world is forced to accommodate more people and expend increased energy on technology, this initiative will be crucial for enabling community-level and large-scale awareness of aquatic affairs.
 
+<p align="center">
+  <img src="images/Algal-Bloom.png" alt="Aerial view of massive algal bloom" width="600">
+</p>
+
+
 Methodology
 
 To achieve the project's objectives, we will utilize advanced computer vision and machine learning techniques. The key components of our methodology include:
