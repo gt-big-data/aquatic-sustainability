@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Login - Aquatic Sustainability</title>
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="stylesheet" href="../css/styles.css" />
+    </head>
+    <body class="login-page-body">
+        <header class="site-header">
+            <a class="brand" href="/">
+                <img src="../assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+                <span class="brand-title">Aquatic Sustainability</span>
+            </a>
+            <nav class="top-nav">
+                <button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+            </nav>
+        </header>
+
+        <main class="container narrow">
+            <section class="login-container">
+                <div class="login-card">
+                    <h1>Sign In</h1>
+                    <p class="muted">Access your Aquatic Sustainability dashboard</p>
+
+                    <form id="loginForm" class="login-form">
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <input type="text" id="username" name="username" required autocomplete="username" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" required autocomplete="current-password" />
+                        </div>
+
+                        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+                        <button type="submit" class="btn btn-primary" id="loginBtn">
+                            <span id="loginBtnText">Sign In</span>
+                            <span id="loginBtnSpinner" style="display: none;">Signing in...</span>
+                        </button>
+                    </form>
+
+                    <p class="login-footer">
+                    Don't have an account? <a href="./register.html">Register here</a>
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water & Sanitation</small>
+        </footer>
+
+        <script src="../js/main.js" defer></script>
+    </body>
+</html>
