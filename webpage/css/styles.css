@@ -1,36 +1,66 @@
 :root {
---panel: #ffffff;
---panel-2: #f3f6fa;
---text: #0c1117;
---muted: #536271;
---brand: #1a73e8;
---accent: #0c9;
---border: #e1e7ef;
+    --panel: #ffffff;
+    --panel-2: #f3f6fa;
+    --text: #0c1117;
+    --muted: #536271;
+    --brand: #1a73e8;
+    --accent: #0c9;
+    --border: #e1e7ef;
 }
 
 
-* { box-sizing: border-box; }
-html, body { height: 100%; }
+* {
+    box-sizing: border-box;
+}
+html, body {
+    height: 100%;
+}
 body {
-margin: 0;
-font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-color: var(--text);
-background: radial-gradient(1200px 600px at 10% -10%, rgba(66,179,255,0.06), transparent), var(--bg);
+    margin: 0;
+    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color: var(--text);
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(66,179,255,0.06), transparent), var(--bg);
 }
 
 
 /* Header */
 .site-header {
-display: flex; align-items: center; justify-content: space-between;
-padding: 12px 20px; border-bottom: 1px solid var(--border);
-background: linear-gradient(180deg, rgba(66,179,255,0.06), transparent 60%), var(--panel);
-position: sticky; top: 0; z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(66,179,255,0.06), transparent 60%), var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 20;
 }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
-.logo { width: 28px; height: 28px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.2)); }
-.brand-title { font-weight: 700; letter-spacing: .2px; }
-.top-nav a { color: var(--text); text-decoration: none; margin: 0 10px; padding: 6px 10px; border-radius: 8px; }
-.top-nav a.active, .top-nav a:hover { background: var(--panel-2); }
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text);
+}
+.logo {
+    width: 28px;
+    height: 28px;
+    filter: drop-shadow(0 1px 0 rgba(0,0,0,.2));
+}
+.brand-title {
+    font-weight: 700;
+    letter-spacing: .2px;
+}
+.top-nav a {
+    color: var(--text);
+    text-decoration: none;
+    margin: 0 10px;
+    padding: 6px 10px;
+    border-radius: 8px;
+}
+.top-nav a.active, .top-nav a:hover {
+    background: var(--panel-2);
+}
 
 
 /* Layout containers */
@@ -73,9 +103,132 @@ width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--bor
 .muted { color: var(--muted); }
 
 
+/* Login page */
+.login-page-body {
+  /* base fallback gradient (kept for very old browsers) */
+  background: linear-gradient(135deg, #0077b6, #00b4d8, #90e0ef);
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-container {
+  display: flex;
+  justify-content: center; /* center the card horizontally like on login */
+  align-items: center; /* center vertically in viewport */
+  min-height: calc(100vh - 160px); /* slightly reduced header/footer allowance */
+  padding: 40px 40px; /* tighter, consistent padding so card doesn't get pushed down */
+  position: relative;
+  z-index: 1;
+}
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 520px; /* allow slightly wider forms on desktop */
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  max-height: calc(100vh - 220px); /* keep the card shorter than the viewport */
+  overflow: auto; /* allow inner scrolling if content is tall (prevents card from flowing to page bottom) */
+  position: relative;
+  z-index: 2; /* sit above animated background */
+}
+
+/* Taller registration card specifically (reduces need to scroll on register form) */
+.login-page-body.register-page .login-card {
+  max-height: calc(100vh - 100px); /* more room for the card */
+  padding: 40px; /* slightly more inner spacing */
+}
+
+/* Nudge the registration card upward so it doesn't sit too low on tall viewports */
+.login-page-body.register-page .login-card {
+  transform: translateY(-6vh);
+}
+
+@media (max-width: 900px) {
+  /* On smaller screens, stop shifting and allow more natural stacking */
+  .login-page-body.register-page .login-card {
+    transform: none;
+    max-height: calc(100vh - 80px);
+    padding: 28px;
+  }
+}
+.login-card h1 { margin-top: 0; color: #1e3a8a; }
+.login-form { margin-top: 24px; }
+.form-group { margin-bottom: 18px; }
+.form-group label { display: block; margin-bottom: 6px; font-weight: 600; color: #1e40af; }
+.form-group input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #cbd5e1; background: white; color: #1e293b; font-size: 15px; transition: all 0.2s; }
+.form-group input:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); }
+.error-message { background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; border-left: 3px solid #dc2626; }
+.success-message { background: #d1fae5; color: #059669; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; border-left: 3px solid #059669; }
+.btn-primary { width: 100%; padding: 14px; font-size: 16px; margin-top: 8px; background: linear-gradient(135deg, #0ea5e9, #06b6d4); border: none; transition: transform 0.2s;}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4); }
+.btn-primary:active { transform: translateY(0); }
+
+/* Center text and inline content inside full-width primary buttons */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center horizontally */
+  text-align: center;
+}
+.login-footer { text-align: center; margin-top: 20px; color: #64748b; }
+.login-footer a { color: #0ea5e9; text-decoration: none; font-weight: 600; }
+.login-footer a:hover { text-decoration: underline; }
+.login-page-body .site-header { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+.login-page-body .brand { color: white; }
+.login-page-body .logo { filter: brightness(0) invert(1) drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+.login-page-body .site-footer { color: rgba(255, 255, 255, 0.8); }
+.role-info { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+.role-info h3 { margin-top: 0; }
+.role-info ul { margin: 16px 0 0 0; padding-left: 20px; }
+.role-info li { margin-bottom: 10px; color: var(--muted); }
+
+@media (max-width: 768px) {
+.login-container { grid-template-columns: 1fr; }
+}
+
+/* Animated water-like background for login/register pages */
+.login-page-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* behind the card (card is z-index:2) */
+  pointer-events: none;
+  /* multi-stop gradient using several blue tones; large background-size lets us animate the position for a flowing effect */
+  background: linear-gradient(120deg, #004e7c 0%, #0077b6 25%, #00a7d3 50%, #57c7e5 75%, #90e0ef 100%);
+  background-size: 600% 600%;
+  filter: blur(36px) saturate(120%);
+  opacity: 0.95;
+  animation: waterShift 10s ease-in-out infinite;
+}
+
+@keyframes waterShift {
+  0% { background-position: 0% 50%; }
+  25% { background-position: 25% 60%; }
+  50% { background-position: 50% 50%; }
+  75% { background-position: 75% 40%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Optional subtle overlay stripes to add depth (low opacity) */
+.login-page-body::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02), transparent 10%),
+                    radial-gradient(circle at 90% 90%, rgba(0,0,0,0.02), transparent 12%);
+  opacity: 0.9;
+  mix-blend-mode: overlay;
+}
+
 /* Footer */
 .site-footer { text-align: center; padding: 18px; color: var(--muted); }
-
 
 /* Responsive */
 @media (max-width: 1100px) {
