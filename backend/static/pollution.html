@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pollution & Marine Health</title>
   <style>
+    :root {
+      --panel: #ffffff;
+      --panel-2: #f3f6fa;
+      --text: #0c1117;
+      --muted: #536271;
+      --brand: #1a73e8;
+      --border: #e1e7ef;
+
+      /* Dark theme variables for modal */
+      --modal-bg: #0f0f0f;
+      --modal-bg-secondary: #1a1a1a;
+      --modal-text: #ffffff;
+      --modal-text-muted: #a0a0a0;
+      --modal-border: #333333;
+      --modal-accent-blue: #3b82f6;
+      --modal-accent-orange: #fb923c;
+      --modal-accent-red: #f87171;
+      --modal-accent-green: #4ade80;
+    }
+
     body { margin: 0; font-family: Arial, sans-serif; }
     nav {
       background-color: #2c3e50;
@@ -22,6 +42,177 @@
       text-decoration: underline;
     }
     #map { height: 90vh; width: 100%; }
+
+    /* Modal Styles - Dark Theme */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--modal-bg);
+      border-radius: 16px;
+      border: 1px solid var(--modal-border);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      width: 90%;
+      max-width: 600px;
+      max-height: 85vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    /* Custom scrollbar for dark theme */
+    .modal::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .modal::-webkit-scrollbar-track {
+      background: var(--modal-bg-secondary);
+      border-radius: 10px;
+    }
+
+    .modal::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 10px;
+    }
+
+    .modal::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--modal-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, var(--modal-bg-secondary) 0%, var(--modal-bg) 100%);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: var(--modal-text);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      color: var(--modal-text-muted);
+      padding: 4px 8px;
+      line-height: 1;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close:hover {
+      background: var(--modal-bg-secondary);
+      color: var(--modal-text);
+      transform: scale(1.1);
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+      background: var(--modal-bg);
+    }
+
+    .modal-section {
+      margin-bottom: 24px;
+    }
+
+    .modal-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      color: var(--modal-accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-weight: 700;
+      border-bottom: 1px solid var(--modal-border);
+      padding-bottom: 8px;
+    }
+
+    .modal-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .modal-info-item {
+      background: var(--modal-bg-secondary);
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid var(--modal-border);
+      transition: all 0.2s ease;
+    }
+
+    .modal-info-item:hover {
+      border-color: #444;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-info-item label {
+      display: block;
+      font-size: 11px;
+      color: var(--modal-text-muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .modal-info-item .value {
+      font-size: 16px;
+      color: var(--modal-text);
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .modal-info-item .value.highlight {
+      color: var(--modal-accent-blue);
+    }
+
+    .modal-info-item .value.warning {
+      color: var(--modal-accent-orange);
+    }
+
+    .modal-info-item .value.danger {
+      color: var(--modal-accent-red);
+    }
+
+    .modal-map-coords {
+      font-family: 'Courier New', monospace;
+      background: #000000;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 8px;
+      border: 1px solid var(--modal-border);
+      color: var(--modal-accent-green);
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 768px) {
+      .modal { width: 95%; }
+      .modal-info-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -30,10 +221,234 @@
     <a href="/climate">Climate</a>
     <a href="/water">Water</a>
   </nav>
-  <h2 style="text-align:center;">Pollution & Marine Health</h2>
+  <h2 style="text-align:center;">Pollution & Marine Health - Oil Spill Detections</h2>
   <div id="map"></div>
 
+  <!-- Modal Popup -->
+  <div id="spillModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Oil Spill Details</h2>
+        <button class="modal-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modalContent">
+        <!-- Content will be dynamically inserted here -->
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Oil spill dummy data
+    const oilSpillData = [
+      {
+        id: 1,
+        name: "Gulf of Mexico Incident",
+        coordinates: { lat: 28.7378, lng: -88.3831 },
+        date: "2024-03-15",
+        time: "14:30 UTC",
+        amountSpilled: "4,200 barrels",
+        amountLiters: "667,800 L",
+        cause: "Pipeline rupture",
+        surfaceArea: "45.2 km²",
+        severity: "high",
+        affectedArea: "Coastal waters near Louisiana",
+        windSpeed: "12 knots NE",
+        seaTemp: "22.5°C",
+        responseStatus: "Active cleanup in progress",
+        estimatedDuration: "3-4 weeks"
+      },
+      {
+        id: 2,
+        name: "North Atlantic Detection",
+        coordinates: { lat: 41.2345, lng: -69.8765 },
+        date: "2024-03-18",
+        time: "09:15 UTC",
+        amountSpilled: "850 barrels",
+        amountLiters: "135,150 L",
+        cause: "Vessel collision",
+        surfaceArea: "12.8 km²",
+        severity: "medium",
+        affectedArea: "Open ocean, 45 nm from shore",
+        windSpeed: "8 knots SW",
+        seaTemp: "18.2°C",
+        responseStatus: "Containment deployed",
+        estimatedDuration: "1-2 weeks"
+      },
+      {
+        id: 3,
+        name: "Caribbean Spill Event",
+        coordinates: { lat: 18.4789, lng: -64.5432 },
+        date: "2024-03-20",
+        time: "16:45 UTC",
+        amountSpilled: "2,100 barrels",
+        amountLiters: "333,900 L",
+        cause: "Tanker hull breach",
+        surfaceArea: "28.5 km²",
+        severity: "high",
+        affectedArea: "Near Puerto Rico coast",
+        windSpeed: "15 knots E",
+        seaTemp: "26.8°C",
+        responseStatus: "Emergency response active",
+        estimatedDuration: "2-3 weeks"
+      },
+      {
+        id: 4,
+        name: "Pacific Northwest Detection",
+        coordinates: { lat: 47.6234, lng: -124.3456 },
+        date: "2024-03-22",
+        time: "11:20 UTC",
+        amountSpilled: "320 barrels",
+        amountLiters: "50,880 L",
+        cause: "Equipment failure",
+        surfaceArea: "5.7 km²",
+        severity: "low",
+        affectedArea: "Washington State waters",
+        windSpeed: "6 knots W",
+        seaTemp: "12.4°C",
+        responseStatus: "Contained",
+        estimatedDuration: "3-5 days"
+      },
+      {
+        id: 5,
+        name: "Atlantic Seaboard Incident",
+        coordinates: { lat: 35.8976, lng: -75.2341 },
+        date: "2024-03-25",
+        time: "07:50 UTC",
+        amountSpilled: "1,650 barrels",
+        amountLiters: "262,350 L",
+        cause: "Illegal discharge",
+        surfaceArea: "18.9 km²",
+        severity: "medium",
+        affectedArea: "Off North Carolina coast",
+        windSpeed: "10 knots N",
+        seaTemp: "16.7°C",
+        responseStatus: "Investigation ongoing",
+        estimatedDuration: "1-2 weeks"
+      }
+    ];
+
+    // Modal functions
+    function openModal(spillData) {
+      const modal = document.getElementById('spillModal');
+      const modalContent = document.getElementById('modalContent');
+
+      const severityClass = spillData.severity === 'high' ? 'danger' :
+        spillData.severity === 'medium' ? 'warning' : 'highlight';
+
+      modalContent.innerHTML = `
+        <div class="modal-section">
+          <h3>Location</h3>
+          <div class="modal-info-item">
+            <label>Incident Name</label>
+            <div class="value">${spillData.name}</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Coordinates</label>
+            <div class="value">${spillData.coordinates.lat.toFixed(4)}°${spillData.coordinates.lat >= 0 ? 'N' : 'S'}, ${Math.abs(spillData.coordinates.lng).toFixed(4)}°${spillData.coordinates.lng >= 0 ? 'E' : 'W'}</div>
+            <div class="modal-map-coords">
+              Lat: ${spillData.coordinates.lat} | Lng: ${spillData.coordinates.lng}
+            </div>
+          </div>
+          <div class="modal-info-item">
+            <label>Affected Area</label>
+            <div class="value">${spillData.affectedArea}</div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Incident Details</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item">
+              <label>Date Occurred</label>
+              <div class="value">${new Date(spillData.date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Time</label>
+              <div class="value">${spillData.time}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Severity</label>
+              <div class="value ${severityClass}">${spillData.severity.toUpperCase()}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Cause</label>
+              <div class="value">${spillData.cause}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Spill Metrics</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item">
+              <label>Amount Spilled</label>
+              <div class="value ${severityClass}">${spillData.amountSpilled}</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">(${spillData.amountLiters})</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Surface Area</label>
+              <div class="value ${severityClass}">${spillData.surfaceArea}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Environmental Conditions</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item">
+              <label>Wind Speed & Direction</label>
+              <div class="value">${spillData.windSpeed}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Sea Surface Temperature</label>
+              <div class="value">${spillData.seaTemp}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Response Status</h3>
+          <div class="modal-info-item">
+            <label>Current Status</label>
+            <div class="value">${spillData.responseStatus}</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Estimated Cleanup Duration</label>
+            <div class="value">${spillData.estimatedDuration}</div>
+          </div>
+        </div>
+      `;
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('spillModal');
+      modal.classList.remove('active');
+    }
+
+    // Initialize modal event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      const modal = document.getElementById('spillModal');
+      const closeBtn = modal.querySelector('.modal-close');
+
+      closeBtn.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+          closeModal();
+        }
+      });
+    });
+
+    // Fetch Google Maps API key and initialize map
     fetch("/api/config/maps-key")
       .then(res => res.json())
       .then(data => {
@@ -44,17 +459,60 @@
         document.head.appendChild(script);
       });
 
-    // this adds the map, we need to get a key
+    // Initialize Google Map with oil spill markers
     function initMap() {
-      const center = { lat: 25.0, lng: -80.0 };
+      const center = { lat: 32.0, lng: -80.0 };
       const map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 5,
+        zoom: 4,
         center: center,
       });
-      new google.maps.Marker({
-        position: center,
-        map,
-        title: "Marine Region"
+
+      // Create markers for each oil spill
+      oilSpillData.forEach(spill => {
+        // Determine marker color based on severity
+        let markerIcon = {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: spill.severity === 'high' ? '#ef4444' :
+                     spill.severity === 'medium' ? '#f59e0b' : '#22c55e',
+          fillOpacity: 0.8,
+          strokeColor: '#ffffff',
+          strokeWeight: 2
+        };
+
+        const marker = new google.maps.Marker({
+          position: spill.coordinates,
+          map: map,
+          title: spill.name,
+          icon: markerIcon,
+          animation: google.maps.Animation.DROP
+        });
+
+        // Add click listener to show popup
+        marker.addListener('click', () => {
+          openModal(spill);
+        });
+
+        // Optional: Add info window on hover
+        const infoWindow = new google.maps.InfoWindow({
+          content: `<div style="padding: 8px;">
+                      <strong>${spill.name}</strong><br>
+                      <span style="color: ${spill.severity === 'high' ? '#ef4444' :
+                                             spill.severity === 'medium' ? '#f59e0b' : '#22c55e'};">
+                        ${spill.severity.toUpperCase()} Severity
+                      </span><br>
+                      ${spill.amountSpilled}<br>
+                      <em>Click for details</em>
+                    </div>`
+        });
+
+        marker.addListener('mouseover', () => {
+          infoWindow.open(map, marker);
+        });
+
+        marker.addListener('mouseout', () => {
+          infoWindow.close();
+        });
       });
     }
   </script>
