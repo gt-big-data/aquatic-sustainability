@@ -235,3 +235,8 @@ width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--bor
 .workspace { grid-template-columns: 1fr; }
 .map-canvas { height: 60vh; }
 }
+
+#map {
+  width: 100%;
+  height: 500px;
+}
