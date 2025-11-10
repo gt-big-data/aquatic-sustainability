@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Oil Spill Prediction · Aquatic Sustainability</title>
+<link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="../">
+<img src="../assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+<span class="brand-title">Aquatic Sustainability</span>
+</a>
+<nav class="top-nav">
+<a href="../pages/flood-drought.html">Flood/Drought</a>
+<a class="active" href="../pages/oil-spill.html">Oil Spill</a>
+<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
+</nav>
+</header>
+
+
+<main class="workspace">
+<aside class="sidebar">
+<h2 class="sidebar-title">Controls</h2>
+<div class="control-group">
+<label for="marineZoneSelect">Marine Zone</label>
+<select id="marineZoneSelect">
+<option value="">Select a zone…</option>
+<option>North Atlantic</option>
+<option>Caribbean</option>
+<option>Pacific Northwest</option>
+<option>Custom (draw)</option>
+</select>
+</div>
+<div class="control-group">
+<label>Overlays</label>
+<label class="checkbox"><input type="checkbox" id="overlayTraffic" checked> Ship traffic</label>
+<label class="checkbox"><input type="checkbox" id="overlayWind" checked> Wind</label>
+<label class="checkbox"><input type="checkbox" id="overlayTemp"> SST</label>
+</div>
+<div class="control-group">
+<label for="confidence">Detection confidence</label>
+<input type="range" id="confidence" min="0" max="100" value="70" />
+<small><span id="confidenceLabel">70</span>%</small>
+</div>
+<button id="btnRunModel" class="btn">Run model</button>
+</aside>
+
+
+<!-- Main: map canvas -->
+<section class="map-panel">
+<div id="map"></div>
+    <script>
+        async function loadGoogleMaps() {
+        try {
+            const response = await fetch("http://127.0.0.1:5000/api/config/maps-key");
+            const data = await response.json();
+            const apiKey = data.googleMapsApiKey;
+
+            if (!apiKey) {
+            throw new Error("Missing Google Maps API key");
+            }
+
+            await new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=maps`;
+            script.async = true;
+            script.defer = true;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+            });
+
+            const { Map } = await google.maps.importLibrary("maps");
+            const map = new Map(document.getElementById("map"), {
+            center: { lat: 33.749, lng: -84.388 }, 
+            zoom: 8,
+            mapTypeId: "terrain",
+            });
+
+        } catch (error) {
+            console.error("Error initializing Google Maps:", error);
+        }
+        }
+
+        loadGoogleMaps();
+    </script>
+
+</section>
+
+
+<aside class="details">
+<h2 class="sidebar-title">Detections</h2>
+<div id="detections" class="annotations">
+<p class="muted">Model detections will render here with timestamps and extents.</p>
+</div>
+</aside>
+</main>
+
+
+<footer class="site-footer">
+<small>Oil Spill Prediction · Prototype</small>
+</footer>
+
+
+<script src="../js/map.js" defer></script>
+<script src="../js/main.js" defer></script>
+<script src="../js/pages/oilSpill.js" defer></script>
+</body>
+</html>

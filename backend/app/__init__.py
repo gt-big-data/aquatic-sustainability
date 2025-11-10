@@ -1,11 +1,14 @@
 from flask import Flask, send_from_directory, redirect, url_for
 from flask_cors import CORS
+from supabase import create_client
 from .config import Config
+
+supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
 def create_app():
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config.from_object(Config)
-    CORS(app)
+    CORS(app, resources={r"/api/*": {"origins": "https://aquatic-sustainability.vercel.app"}})
 
     # registering API routes
     from .routes import bp as api_bp
