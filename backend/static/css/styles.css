@@ -339,10 +339,11 @@ select, input[type="range"], input[type="text"], input[type="number"] {
 
 /* Responsive */
 @media (max-width: 1100px) {
-    .workspace {
-        grid-template-columns: 1fr;
-    }
-    .map-canvas {
-        height: 60vh;
-    }
+.workspace { grid-template-columns: 1fr; }
+.map-canvas { height: 60vh; }
+}
+
+#map {
+  width: 100%;
+  height: 500px;
 }
