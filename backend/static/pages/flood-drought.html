@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flood/Drought Prediction · Aquatic Sustainability</title>
+<link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="../">
+<img src="../assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+<span class="brand-title">Aquatic Sustainability</span>
+</a>
+<nav class="top-nav">
+<a class="active" href="../pages/flood-drought.html">Flood/Drought</a>
+<a href="../pages/oil-spill.html">Oil Spill</a>
+<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
+</nav>
+</header>
+
+
+<main class="workspace">
+<!-- Sidebar: controls (mirrors UML side panel concept) -->
+<aside class="sidebar">
+<h2 class="sidebar-title">Controls</h2>
+<div class="control-group">
+<label for="regionSelect">Region</label>
+<select id="regionSelect">
+<option value="">Select a region…</option>
+<option>Gulf Coast</option>
+<option>California</option>
+<option>Great Lakes</option>
+<option>Custom (draw)</option>
+</select>
+</div>
+<div class="control-group">
+<label>Layers</label>
+<label class="checkbox"><input type="checkbox" id="layerFlood" checked> Flood risk</label>
+<label class="checkbox"><input type="checkbox" id="layerDrought" checked> Drought risk</label>
+<label class="checkbox"><input type="checkbox" id="layerAfford"> Water affordability</label>
+<label class="checkbox"><input type="checkbox" id="layerIncidents"> Incidents</label>
+</div>
+<div class="control-group">
+<label for="timeHorizon">Time horizon</label>
+<input type="range" id="timeHorizon" min="0" max="36" value="6" />
+<small><span id="timeHorizonLabel">6</span> months</small>
+</div>
+<button id="btnApply" class="btn">Apply</button>
+<button id="btnReset" class="btn btn-outline">Reset</button>
+</aside>
+
+
+<!-- Main: map canvas placeholder -->
+<section class="map-panel">
+<div id="map"></div>
+    <script>
+async function loadGoogleMaps() {
+  try {
+    const response = await fetch("http://127.0.0.1:5000/api/config/maps-key");
+    const data = await response.json();
+    const apiKey = data.googleMapsApiKey;
+
+    if (!apiKey) {
+      throw new Error("Missing Google Maps API key");
+    }
+
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=maps`;
+      script.async = true;
+      script.defer = true;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+
+    const { Map } = await google.maps.importLibrary("maps");
+    const map = new Map(document.getElementById("map"), {
+      center: { lat: 33.749, lng: -84.388 }, 
+      zoom: 8,
+      mapTypeId: "terrain",
+    });
+
+  } catch (error) {
+    console.error("Error initializing Google Maps:", error);
+  }
+}
+
+loadGoogleMaps();
+</script>
+
+</section>
+
+
+<!-- Right: annotation/results pane -->
+<aside class="details">
+<h2 class="sidebar-title">Annotations</h2>
+<div id="annotations" class="annotations">
+<p class="muted">Annotations will appear here (flood/drought vulnerability, affordability, incidents).</p>
+</div>
+</aside>
+</main>
+
+
+<footer class="site-footer">
+<small>Flood/Drought Prediction · Prototype</small>
+</footer>
+
+
+<script src="../js/map.js" defer></script>
+<script src="../js/main.js" defer></script>
+<script src="../js/pages/floodDrought.js" defer></script>
+</body>
+</html>

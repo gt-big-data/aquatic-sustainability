@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Register - Aquatic Sustainability</title>
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="stylesheet" href="../css/styles.css" />
+    </head>
+    <body class="login-page-body register-page">
+        <header class="site-header">
+            <a class="brand" href="/">
+                <img src="../assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+                <span class="brand-title">Aquatic Sustainability</span>
+            </a>
+            <nav class="top-nav">
+            </nav>
+        </header>
+
+        <main class="container narrow">
+            <section class="login-container">
+                <div class="login-card">
+                    <h1>Create Account</h1>
+                    <p class="muted">Register for access to the Aquatic Sustainability platform</p>
+
+                    <form id="registerForm" class="login-form">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" required autocomplete="email" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" required autocomplete="new-password" minlength="6" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirm Password</label>
+                            <input type="password" id="confirmPassword" name="confirmPassword" required autocomplete="new-password" minlength="6" />
+                        </div>
+
+                        <div id="errorMessage" class="error-message" style="display: none;"></div>
+                        <div id="successMessage" class="success-message" style="display: none;"></div>
+
+                        <button type="submit" class="btn btn-primary" id="registerBtn">
+                            <span id="registerBtnText">Create Account</span>
+                            <span id="registerBtnSpinner" style="display: none;">Creating account...</span>
+                        </button>
+                    </form>
+
+                    <p class="login-footer">
+                    Already have an account? <a href="./login.html">Sign in here</a>
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water & Sanitation</small>
+        </footer>
+
+        <script src="../js/main.js" defer></script>
+        <script src="../js/register.js" defer></script>
+    </body>
+</html>

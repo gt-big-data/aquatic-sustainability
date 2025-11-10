@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Climate Impact & Erosion Trends</title>
+  <title>Drought & Climate Impact Map</title>
   <style>
     body { margin: 0; font-family: Arial, sans-serif; }
     nav {
@@ -13,27 +13,22 @@
       justify-content: center;
       gap: 20px;
     }
-    nav a {
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    nav a:hover {
-      text-decoration: underline;
-    }
+    nav a { color: white; text-decoration: none; font-weight: bold; }
+    nav a:hover { text-decoration: underline; }
     #map { height: 90vh; width: 100%; }
   </style>
 </head>
 <body>
   <nav>
     <a href="/pollution">Pollution</a>
-    <a href="/climate">Climate</a>
+    <a href="/climate">Drought & Climate</a>
     <a href="/water">Water</a>
   </nav>
-  <h2 style="text-align:center;">Climate Impact & Erosion Trends</h2>
+  <h2 style="text-align:center;">Drought & Climate Impact Visualization</h2>
   <div id="map"></div>
 
   <script>
+    // Load Maps API dynamically
     fetch("/api/config/maps-key")
       .then(res => res.json())
       .then(data => {
@@ -45,16 +40,46 @@
       });
 
     function initMap() {
-      const center = { lat: 35.7, lng: -120.0 };
       const map = new google.maps.Map(document.getElementById("map"), {
         zoom: 5,
-        center: center,
+        center: { lat: 37.0, lng: -97.0 },
+        mapTypeId: "terrain",
       });
-      new google.maps.Marker({
-        position: center,
-        map,
-        title: "Erosion Area"
-      });
+
+      // Fetch drought zones dynamically from Flask
+      fetch("/api/drought")
+        .then(response => response.json())
+        .then(droughtZones => {
+          droughtZones.forEach(zone => {
+            const color = getColorFromRisk(zone.risk);
+
+            const polygon = new google.maps.Polygon({
+              paths: zone.coords,
+              strokeColor: color,
+              strokeOpacity: 0.9,
+              strokeWeight: 1.5,
+              fillColor: color,
+              fillOpacity: 0.6,
+              map: map,
+            });
+
+            const infoWindow = new google.maps.InfoWindow({
+              content: `<b>${zone.name}</b><br>Drought Risk: ${(zone.risk * 100).toFixed(0)}%`
+            });
+
+            polygon.addListener("click", (event) => {
+              infoWindow.setPosition(event.latLng);
+              infoWindow.open(map);
+            });
+          });
+        });
+    }
+
+    // Color gradient: low (green/yellow) → high (red)
+    function getColorFromRisk(risk) {
+      const r = Math.floor(255 * risk);        // more red with higher risk
+      const g = Math.floor(200 * (1 - risk));  // less green with higher risk
+      return `rgb(${r}, ${g}, 0)`;             // RGB color blend
     }
   </script>
 </body>
