@@ -3,7 +3,7 @@
  */
 async function loadGoogleMaps() {
   try {
-    const response = await fetch("http://127.0.0.1:8080/api/config/maps-key");
+    const response = await fetch("/api/config/maps-key");
     const data = await response.json();
     const apiKey = data.googleMapsApiKey;
 

@@ -52,9 +52,12 @@ Enforce clean and sustainable water practices at both the regional and national 
 
 **Benefits**
 
-<ins>Enhanced Disaster Planning:</ins> Provides precise LSTM data on flood and drought likelihoods, helping people in critical areas to plan ahead or evacuate.
-<ins>Policy Development:</ins> Supports policymakers with geographic water affordability data to address regional pipe quality and lack of access to clean water.
-<ins>Watershed Protection:</ins> Facilitates the discovery of both man-made and organic accidents like oil spills and algal blooms, leading to faster removal of contaminants.
+<ins>Enhanced Disaster Planning:</ins> Provides precise LSTM data on flood and drought likelihoods, helping people in critical areas to plan ahead or evacuate.<br />
+
+<ins>Policy Development:</ins> Supports policymakers with geographic water affordability data to address regional pipe quality and lack of access to clean water.<br />
+
+<ins>Watershed Protection:</ins> Facilitates the discovery of both man-made and organic accidents like oil spills and algal blooms, leading to faster removal of contaminants.<br />
+
 <ins>Environmental Monitoring:</ins> Helps record the onset of rising sea levels from global warming by using flood and drought frequency as key indices.
 
 **Overall Goals**
