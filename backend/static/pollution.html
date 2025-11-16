@@ -43,6 +43,55 @@
     }
     #map { height: 90vh; width: 100%; }
 
+    /* Filter Controls */
+    .filter-container {
+      position: absolute;
+      top: 80px;
+      right: 20px;
+      background-color: white;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      min-width: 250px;
+    }
+
+    .filter-container h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .filter-control {
+      margin-bottom: 12px;
+    }
+
+    .filter-control label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .filter-control input[type="range"] {
+      width: 100%;
+    }
+
+    .filter-value {
+      font-weight: 600;
+      color: #1a73e8;
+      font-size: 16px;
+    }
+
+    .filter-stats {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e1e7ef;
+      font-size: 12px;
+      color: #666;
+    }
+
     /* Modal Styles - Dark Theme */
     .modal-overlay {
       position: fixed;
@@ -218,10 +267,23 @@
 <body>
   <nav>
     <a href="/pollution">Pollution</a>
-    <a href="/climate">Climate</a>
-    <a href="/water">Water</a>
+    <a href="/drought">Drought</a>
+    <a href="/flood">Flood</a>
   </nav>
   <h2 style="text-align:center;">Pollution & Marine Health - Oil Spill Detections</h2>
+
+  <!-- Filter Controls -->
+  <div class="filter-container">
+    <h3>Filter by Spill Amount</h3>
+    <div class="filter-control">
+      <label>Minimum Barrels: <span class="filter-value" id="amountValue">0</span></label>
+      <input type="range" id="amountFilter" min="0" max="5000" value="0" step="100">
+    </div>
+    <div class="filter-stats">
+      Showing <strong id="visibleCount">0</strong> of <strong id="totalCount">0</strong> spills
+    </div>
+  </div>
+
   <div id="map"></div>
 
   <!-- Modal Popup -->
@@ -238,6 +300,9 @@
   </div>
 
   <script>
+    let markerObjects = [];
+    let map;
+
     // Oil spill dummy data
     const oilSpillData = [
       {
@@ -247,6 +312,7 @@
         date: "2024-03-15",
         time: "14:30 UTC",
         amountSpilled: "4,200 barrels",
+        amountBarrels: 4200,
         amountLiters: "667,800 L",
         cause: "Pipeline rupture",
         surfaceArea: "45.2 km²",
@@ -264,6 +330,7 @@
         date: "2024-03-18",
         time: "09:15 UTC",
         amountSpilled: "850 barrels",
+        amountBarrels: 850,
         amountLiters: "135,150 L",
         cause: "Vessel collision",
         surfaceArea: "12.8 km²",
@@ -281,6 +348,7 @@
         date: "2024-03-20",
         time: "16:45 UTC",
         amountSpilled: "2,100 barrels",
+        amountBarrels: 2100,
         amountLiters: "333,900 L",
         cause: "Tanker hull breach",
         surfaceArea: "28.5 km²",
@@ -298,6 +366,7 @@
         date: "2024-03-22",
         time: "11:20 UTC",
         amountSpilled: "320 barrels",
+        amountBarrels: 320,
         amountLiters: "50,880 L",
         cause: "Equipment failure",
         surfaceArea: "5.7 km²",
@@ -315,6 +384,7 @@
         date: "2024-03-25",
         time: "07:50 UTC",
         amountSpilled: "1,650 barrels",
+        amountBarrels: 1650,
         amountLiters: "262,350 L",
         cause: "Illegal discharge",
         surfaceArea: "18.9 km²",
@@ -326,6 +396,21 @@
         estimatedDuration: "1-2 weeks"
       }
     ];
+
+    // Filter function
+    function updateFilter() {
+      const amountThreshold = document.getElementById('amountFilter').value;
+      document.getElementById('amountValue').textContent = parseInt(amountThreshold).toLocaleString();
+
+      let visibleCount = 0;
+      markerObjects.forEach((markerData) => {
+        const shouldShow = markerData.spill.amountBarrels >= parseInt(amountThreshold);
+        markerData.marker.setVisible(shouldShow);
+        if (shouldShow) visibleCount++;
+      });
+
+      document.getElementById('visibleCount').textContent = visibleCount;
+    }
 
     // Modal functions
     function openModal(spillData) {
@@ -462,10 +547,17 @@
     // Initialize Google Map with oil spill markers
     function initMap() {
       const center = { lat: 32.0, lng: -80.0 };
-      const map = new google.maps.Map(document.getElementById("map"), {
+      map = new google.maps.Map(document.getElementById("map"), {
         zoom: 4,
         center: center,
       });
+
+      // Initialize filter counts
+      document.getElementById('totalCount').textContent = oilSpillData.length;
+      document.getElementById('visibleCount').textContent = oilSpillData.length;
+
+      // Setup filter listener
+      document.getElementById('amountFilter').addEventListener('input', updateFilter);
 
       // Create markers for each oil spill
       oilSpillData.forEach(spill => {
@@ -487,6 +579,9 @@
           icon: markerIcon,
           animation: google.maps.Animation.DROP
         });
+
+        // Store marker reference for filtering
+        markerObjects.push({ marker: marker, spill: spill });
 
         // Add click listener to show popup
         marker.addListener('click', () => {
