@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH --job-name=s1_ocean_scan
+#SBATCH --time=04:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --array=0-9999%200   # set number of rows-1; %200 caps concurrency
+#SBATCH --output=logs/%A_%a.out
+
+module load cuda  # if TF/GPU available, else skip
+source /path/to/venv/bin/activate
+
+SCENE_CSV=/path/to/scene_tasks.csv
+ROW_INDEX=${SLURM_ARRAY_TASK_ID}
+SAVED_MODEL=/path/to/saved_model
+RESULTS_DIR=/path/to/results_dir
+
+python worker_inference.py --scene-csv $SCENE_CSV --row-index $ROW_INDEX --saved-model $SAVED_MODEL --results-dir $RESULTS_DIR --chip-px 400 --stride 200 --batch-size 16
