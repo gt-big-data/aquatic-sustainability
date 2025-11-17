@@ -14,22 +14,22 @@ def create_app():
     from .routes import bp as api_bp
     app.register_blueprint(api_bp, url_prefix="/api")
 
-    # Redirect homepage , this is pollution for now, we can create a landing page
+    # Homepage - landing page
     @app.route("/")
     def index():
-        return redirect(url_for("pollution"))
+        return send_from_directory(app.static_folder, "index.html")
     # this is based on the figma design
     # Pollution & Marine Health
     @app.route("/pollution")
     def pollution():
         return send_from_directory(app.static_folder, "pollution.html")
-    # Climate Impact & Erosion Trends
-    @app.route("/climate")
-    def climate():
+    # Drought & Climate Impact
+    @app.route("/drought")
+    def drought():
         return send_from_directory(app.static_folder, "climate.html")
-    # Water Resources & Availability
-    @app.route("/water")
-    def water():
+    # Flood Resources & Availability
+    @app.route("/flood")
+    def flood():
         return send_from_directory(app.static_folder, "water.html")
 
     return app
