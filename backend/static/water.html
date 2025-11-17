@@ -3,8 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Water Resources & Availability</title>
+  <title>Flood Risk Assessment</title>
   <style>
+    :root {
+      --panel: #ffffff;
+      --panel-2: #f3f6fa;
+      --text: #0c1117;
+      --muted: #536271;
+      --brand: #1a73e8;
+      --border: #e1e7ef;
+
+      /* Dark theme variables for modal */
+      --modal-bg: #0f0f0f;
+      --modal-bg-secondary: #1a1a1a;
+      --modal-text: #ffffff;
+      --modal-text-muted: #a0a0a0;
+      --modal-border: #333333;
+      --modal-accent-blue: #3b82f6;
+      --modal-accent-orange: #fb923c;
+      --modal-accent-red: #f87171;
+      --modal-accent-green: #4ade80;
+    }
+
     body { margin: 0; font-family: Arial, sans-serif; }
     nav {
       background-color: #2c3e50;
@@ -22,18 +42,397 @@
       text-decoration: underline;
     }
     #map { height: 90vh; width: 100%; }
+
+    /* Modal Styles - Dark Theme */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease-in;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal {
+      background-color: var(--modal-bg);
+      color: var(--modal-text);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 700px;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+      animation: slideUp 0.3s ease-out;
+      border: 1px solid var(--modal-border);
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--modal-border);
+      background-color: var(--modal-bg-secondary);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 22px;
+      color: var(--modal-text);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--modal-text-muted);
+      font-size: 32px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: var(--modal-text);
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-section {
+      margin-bottom: 24px;
+    }
+
+    .modal-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--modal-text-muted);
+    }
+
+    .modal-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .modal-info-item {
+      background-color: var(--modal-bg-secondary);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--modal-border);
+    }
+
+    .modal-info-item label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--modal-text-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .modal-info-item .value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--modal-text);
+    }
+
+    .severity-high {
+      color: var(--modal-accent-red) !important;
+    }
+
+    .severity-medium {
+      color: var(--modal-accent-orange) !important;
+    }
+
+    .severity-low {
+      color: var(--modal-accent-green) !important;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-high {
+      background-color: rgba(248, 113, 113, 0.2);
+      color: var(--modal-accent-red);
+    }
+
+    .status-medium {
+      background-color: rgba(251, 146, 60, 0.2);
+      color: var(--modal-accent-orange);
+    }
+
+    .status-low {
+      background-color: rgba(74, 222, 128, 0.2);
+      color: var(--modal-accent-green);
+    }
+
+    /* Filter Controls */
+    .filter-container {
+      position: absolute;
+      top: 80px;
+      right: 20px;
+      background-color: white;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      min-width: 250px;
+    }
+
+    .filter-container h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .filter-control {
+      margin-bottom: 12px;
+    }
+
+    .filter-control label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .filter-control input[type="range"] {
+      width: 100%;
+    }
+
+    .filter-value {
+      font-weight: 600;
+      color: #1a73e8;
+      font-size: 16px;
+    }
+
+    .filter-stats {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #e1e7ef;
+      font-size: 12px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <nav>
     <a href="/pollution">Pollution</a>
-    <a href="/climate">Climate</a>
-    <a href="/water">Water</a>
+    <a href="/drought">Drought</a>
+    <a href="/flood">Flood</a>
   </nav>
-  <h2 style="text-align:center;">Water Resources & Availability</h2>
+  <h2 style="text-align:center;">Flood Risk Assessment & Prediction</h2>
+
+  <!-- Filter Controls -->
+  <div class="filter-container">
+    <h3>Filter by Probability</h3>
+    <div class="filter-control">
+      <label>Minimum Probability: <span class="filter-value" id="probabilityValue">0%</span></label>
+      <input type="range" id="probabilityFilter" min="0" max="100" value="0" step="5">
+    </div>
+    <div class="filter-stats">
+      Showing <strong id="visibleCount">0</strong> of <strong id="totalCount">0</strong> zones
+    </div>
+  </div>
+
   <div id="map"></div>
 
+  <!-- Modal Popup -->
+  <div id="floodModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Flood Zone Details</h2>
+        <button class="modal-close" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="modalContent">
+        <!-- Content will be dynamically inserted here -->
+      </div>
+    </div>
+  </div>
+
   <script>
+    let floodZones = [];
+    let polygonObjects = [];
+    let map;
+
+    function updateFilter() {
+      const probabilityThreshold = document.getElementById('probabilityFilter').value / 100;
+      document.getElementById('probabilityValue').textContent = Math.round(probabilityThreshold * 100) + '%';
+
+      let visibleCount = 0;
+      polygonObjects.forEach((polygonData) => {
+        const shouldShow = polygonData.zone.probability >= probabilityThreshold;
+        polygonData.polygon.setVisible(shouldShow);
+        if (shouldShow) visibleCount++;
+      });
+
+      document.getElementById('visibleCount').textContent = visibleCount;
+    }
+
+    function openModal(zoneData) {
+      const modal = document.getElementById('floodModal');
+      const modalContent = document.getElementById('modalContent');
+
+      const severityClass = `severity-${zoneData.severity}`;
+      const statusClass = `status-${zoneData.severity}`;
+      const probabilityPercent = (zoneData.probability * 100).toFixed(0);
+
+      modalContent.innerHTML = `
+        <div class="modal-section">
+          <h3>Location Overview</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item" style="grid-column: 1 / -1;">
+              <label>Zone Name</label>
+              <div class="value">${zoneData.name}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Flood Probability</label>
+              <div class="value ${severityClass}">${probabilityPercent}%</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Risk Level</label>
+              <div class="value">
+                <span class="status-badge ${statusClass}">${zoneData.severity.toUpperCase()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Flood Characteristics</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item">
+              <label>Expected Depth</label>
+              <div class="value ${severityClass}">${zoneData.depth}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Flood Velocity</label>
+              <div class="value ${severityClass}">${zoneData.velocity}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Duration</label>
+              <div class="value">${zoneData.duration}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Soil Moisture</label>
+              <div class="value">${zoneData.soilMoisture}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Environmental Conditions</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item">
+              <label>Precipitation Rate</label>
+              <div class="value">${zoneData.precipitation}</div>
+            </div>
+            <div class="modal-info-item">
+              <label>Elevation Range</label>
+              <div class="value">${zoneData.elevation}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Impact Assessment</h3>
+          <div class="modal-info-grid">
+            <div class="modal-info-item">
+              <label>Population at Risk</label>
+              <div class="value ${severityClass}">${zoneData.populationRisk}</div>
+            </div>
+            <div class="modal-info-item" style="grid-column: 1 / -1;">
+              <label>Infrastructure Impact</label>
+              <div class="value">${zoneData.infrastructureImpact}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Historical Data</h3>
+          <div class="modal-info-item">
+            <label>Last Flood Incident</label>
+            <div class="value">${new Date(zoneData.lastIncident).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}</div>
+          </div>
+        </div>
+      `;
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('floodModal');
+      modal.classList.remove('active');
+    }
+
+    // Initialize modal event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      const modal = document.getElementById('floodModal');
+      const closeBtn = modal.querySelector('.modal-close');
+
+      closeBtn.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+          closeModal();
+        }
+      });
+    });
+
+    // Fetch Google Maps API key and initialize map
     fetch("/api/config/maps-key")
       .then(res => res.json())
       .then(data => {
@@ -44,17 +443,96 @@
         document.head.appendChild(script);
       });
 
+    // Initialize Google Map with flood zones
     function initMap() {
-      const center = { lat: 40.0, lng: -95.0 };
-      const map = new google.maps.Map(document.getElementById("map"), {
+      const center = { lat: 37.0, lng: -95.0 };
+      map = new google.maps.Map(document.getElementById("map"), {
         zoom: 4,
         center: center,
+        mapTypeId: "terrain",
       });
-      new google.maps.Marker({
-        position: center,
-        map,
-        title: "Water Availability Zone"
-      });
+
+      // Fetch flood zones from API
+      fetch("/api/flood")
+        .then(response => response.json())
+        .then(zones => {
+          floodZones = zones;
+          document.getElementById('totalCount').textContent = zones.length;
+          document.getElementById('visibleCount').textContent = zones.length;
+
+          // Setup filter listener
+          document.getElementById('probabilityFilter').addEventListener('input', updateFilter);
+
+          zones.forEach(zone => {
+            // Determine polygon color based on severity
+            let fillColor, strokeColor;
+            switch(zone.severity) {
+              case 'high':
+                fillColor = '#ef4444';
+                strokeColor = '#dc2626';
+                break;
+              case 'medium':
+                fillColor = '#f59e0b';
+                strokeColor = '#d97706';
+                break;
+              default:
+                fillColor = '#22c55e';
+                strokeColor = '#16a34a';
+            }
+
+            // Create polygon for flood zone
+            const polygon = new google.maps.Polygon({
+              paths: zone.coordinates,
+              strokeColor: strokeColor,
+              strokeOpacity: 0.9,
+              strokeWeight: 2,
+              fillColor: fillColor,
+              fillOpacity: 0.4,
+              map: map,
+            });
+
+            // Store polygon reference for filtering
+            polygonObjects.push({ polygon: polygon, zone: zone });
+
+            // Add click listener to show popup
+            polygon.addListener('click', (event) => {
+              openModal(zone);
+            });
+
+            // Create center point for label
+            const bounds = new google.maps.LatLngBounds();
+            zone.coordinates.forEach(coord => {
+              bounds.extend(new google.maps.LatLng(coord.lat, coord.lng));
+            });
+            const center = bounds.getCenter();
+
+            // Add info window on hover
+            const infoWindow = new google.maps.InfoWindow({
+              content: `<div style="padding: 8px; max-width: 200px;">
+                          <strong>${zone.name}</strong><br>
+                          <span style="color: ${fillColor};">
+                            ${zone.severity.toUpperCase()} Risk
+                          </span><br>
+                          Probability: ${(zone.probability * 100).toFixed(0)}%<br>
+                          Depth: ${zone.depth}<br>
+                          <em>Click for full details</em>
+                        </div>`,
+              position: center
+            });
+
+            polygon.addListener('mouseover', (event) => {
+              infoWindow.setPosition(event.latLng);
+              infoWindow.open(map);
+            });
+
+            polygon.addListener('mouseout', () => {
+              infoWindow.close();
+            });
+          });
+        })
+        .catch(error => {
+          console.error("Error loading flood zones:", error);
+        });
     }
   </script>
 </body>
