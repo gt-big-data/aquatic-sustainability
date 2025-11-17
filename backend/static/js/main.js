@@ -20,23 +20,23 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (logoutBtn) {
 		logoutBtn.addEventListener('click', () => {
 			localStorage.removeItem('access_token');
-			window.location.href = '/static/pages/login.html';
+			window.location.href = '/login';
 		});
 	}
 
 	// Protect all pages except login/register
-	const isLogin = window.location.pathname.includes('login.html');
-	const isRegister = window.location.pathname.includes('register.html');
+	const isLogin = window.location.pathname.includes('/login');
+	const isRegister = window.location.pathname.includes('/register');
 	const token = localStorage.getItem('access_token');
 	if (!isLogin && !isRegister) {
 		// Protected page: redirect to login if not authenticated
 		if (!token) {
-			window.location.href = '/static/pages/login.html';
+			window.location.href = '/login';
 		}
 	} else {
 		// If on login or register and already authenticated, redirect to index
 		if (token) {
-			window.location.href = '/static/index.html';
+			window.location.href = '/';
 		}
 	}
 });
