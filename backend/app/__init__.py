@@ -17,19 +17,25 @@ def create_app():
     # Redirect homepage , this is pollution for now, we can create a landing page
     @app.route("/")
     def index():
-        return redirect(url_for("pollution"))
+        return send_from_directory(app.static_folder, "index.html")
+    @app.route("/login")
+    def login():
+        return send_from_directory(app.static_folder + "/pages", "login.html")
+    @app.route("/register")
+    def register():
+        return send_from_directory(app.static_folder + "/pages", "register.html")
     # this is based on the figma design
     # Pollution & Marine Health
-    @app.route("/pollution")
-    def pollution():
-        return send_from_directory(app.static_folder, "pollution.html")
+    @app.route("/oil-spill")
+    def oilSpill():
+        return send_from_directory(app.static_folder + "/pages", "oil-spill.html")
     # Climate Impact & Erosion Trends
-    @app.route("/climate")
-    def climate():
-        return send_from_directory(app.static_folder, "climate.html")
+    @app.route("/flood-drought")
+    def floodDrought():
+        return send_from_directory(app.static_folder + "/pages", "flood-drought.html")
     # Water Resources & Availability
     @app.route("/water")
     def water():
-        return send_from_directory(app.static_folder, "water.html")
+        return send_from_directory(app.static_folder + "/pages", "water.html")
 
     return app

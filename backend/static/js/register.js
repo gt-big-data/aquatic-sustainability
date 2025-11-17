@@ -24,7 +24,7 @@ if (registerForm) {
 
             if (res.ok) {
                 alert("Registration successful! Please check your email if verification is required.");
-                window.location.href = "login.html";
+                window.location.href = "/login";
             } else {
                 const msg = (data && (data.error || data.message)) || `Registration failed (${res.status})`;
                 alert(msg);

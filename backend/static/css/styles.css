@@ -6,6 +6,18 @@
     --brand: #1a73e8;
     --accent: #0c9;
     --border: #e1e7ef;
+
+      /* Dark theme variables for modal */
+      --modal-bg: #0f0f0f;
+      --modal-bg-secondary: #1a1a1a;
+      --modal-text: #ffffff;
+      --modal-text-muted: #a0a0a0;
+      --modal-border: #333333;
+      --modal-accent-blue: #3b82f6;
+      --modal-accent-orange: #fb923c;
+      --modal-accent-red: #f87171;
+      --modal-accent-green: #4ade80;
+    
 }
 
 
@@ -347,3 +359,173 @@ select, input[type="range"], input[type="text"], input[type="number"] {
   width: 100%;
   height: 500px;
 }
+    /* Modal Styles - Dark Theme */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--modal-bg);
+      border-radius: 16px;
+      border: 1px solid var(--modal-border);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      width: 90%;
+      max-width: 600px;
+      max-height: 85vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    /* Custom scrollbar for dark theme */
+    .modal::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .modal::-webkit-scrollbar-track {
+      background: var(--modal-bg-secondary);
+      border-radius: 10px;
+    }
+
+    .modal::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 10px;
+    }
+
+    .modal::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--modal-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, var(--modal-bg-secondary) 0%, var(--modal-bg) 100%);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: var(--modal-text);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      color: var(--modal-text-muted);
+      padding: 4px 8px;
+      line-height: 1;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close:hover {
+      background: var(--modal-bg-secondary);
+      color: var(--modal-text);
+      transform: scale(1.1);
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+      background: var(--modal-bg);
+    }
+
+    .modal-section {
+      margin-bottom: 24px;
+    }
+
+    .modal-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      color: var(--modal-accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-weight: 700;
+      border-bottom: 1px solid var(--modal-border);
+      padding-bottom: 8px;
+    }
+
+    .modal-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .modal-info-item {
+      background: var(--modal-bg-secondary);
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid var(--modal-border);
+      transition: all 0.2s ease;
+    }
+
+    .modal-info-item:hover {
+      border-color: #444;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-info-item label {
+      display: block;
+      font-size: 11px;
+      color: var(--modal-text-muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .modal-info-item .value {
+      font-size: 16px;
+      color: var(--modal-text);
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .modal-info-item .value.highlight {
+      color: var(--modal-accent-blue);
+    }
+
+    .modal-info-item .value.warning {
+      color: var(--modal-accent-orange);
+    }
+
+    .modal-info-item .value.danger {
+      color: var(--modal-accent-red);
+    }
+
+    .modal-map-coords {
+      font-family: 'Courier New', monospace;
+      background: #000000;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 8px;
+      border: 1px solid var(--modal-border);
+      color: var(--modal-accent-green);
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 768px) {
+      .modal { width: 95%; }
+      .modal-info-grid { grid-template-columns: 1fr; }
+    }
