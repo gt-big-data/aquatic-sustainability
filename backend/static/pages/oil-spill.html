@@ -22,7 +22,7 @@
 
 
 <main class="workspace">
-<aside class="sidebar">
+<!--<aside class="sidebar">
 <h2 class="sidebar-title">Controls</h2>
 <div class="control-group">
 <label for="marineZoneSelect">Marine Zone</label>
@@ -46,11 +46,17 @@
 <small><span id="confidenceLabel">70</span>%</small>
 </div>
 <button id="btnRunModel" class="btn">Run model</button>
-</aside>
+</aside>-->
 
 
 <!-- Main: map canvas -->
 <section class="map-panel">
+<div class="map-search-bar">
+  <form id="searchForm" autocomplete="off">
+    <input type="text" id="searchInput" placeholder="Search location..." />
+    <button type="submit" class="btn">Search</button>
+  </form>
+</div>
 <div id="map"></div>
    <div id="spillModal" class="modal-overlay">
     <div class="modal">
@@ -287,11 +293,29 @@
       });
 
     // Initialize Google Map with oil spill markers
+    let map;
     function initMap() {
       const center = { lat: 32.0, lng: -80.0 };
-      const map = new google.maps.Map(document.getElementById("map"), {
+      map = new google.maps.Map(document.getElementById("map"), {
         zoom: 4,
         center: center,
+      });
+
+      // Search bar logic
+      const form = document.getElementById('searchForm');
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const query = document.getElementById('searchInput').value;
+        if (!query) return;
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: query }, function(results, status) {
+          if (status === 'OK' && results[0]) {
+            map.setCenter(results[0].geometry.location);
+            map.setZoom(6);
+          } else {
+            alert('Location not found.');
+          }
+        });
       });
 
       // Create markers for each oil spill
@@ -347,18 +371,18 @@
 </section>
 
 
-<aside class="details">
+<!--<aside class="details">
 <h2 class="sidebar-title">Detections</h2>
 <div id="detections" class="annotations">
 <p class="muted">Model detections will render here with timestamps and extents.</p>
 </div>
-</aside>
+</aside>-->
 </main>
 
-
+<!--
 <footer class="site-footer">
 <small>Oil Spill Prediction · Prototype</small>
-</footer>
+</footer>-->
 
 
 <script src="/static/js/map.js" defer></script>

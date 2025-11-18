@@ -20,7 +20,7 @@ crosshair.innerHTML = `
 el.appendChild(crosshair);
 
 
-const badge = document.createElement('div');
+// const badge = document.createElement('div');
 badge.textContent = 'Map API: not connected';
 badge.style.position = 'absolute';
 badge.style.right = '10px';
