@@ -1,3 +1,68 @@
+/* Floating map search bar styles */
+.map-search-bar {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  max-width: 98vw;
+  background: rgba(255,255,255,0.95);
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  z-index: 30;
+  padding: 12px 18px 8px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.map-search-bar form {
+  display: flex;
+  gap: 8px;
+}
+.map-search-bar input[type="text"] {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  background: #f7fafd;
+  outline: none;
+  transition: border 0.2s;
+}
+.map-search-bar input[type="text"]:focus {
+  border: 1.5px solid var(--brand);
+}
+.map-search-bar .btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 1rem;
+}
+.autocomplete-list {
+  margin: 4px 0 0 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border: 1px solid var(--border);
+  max-height: 180px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 40;
+}
+.autocomplete-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text);
+  border-bottom: 1px solid #f3f6fa;
+}
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+.autocomplete-item:hover {
+  background: var(--panel-2);
+}
 :root {
     --panel: #ffffff;
     --panel-2: #f3f6fa;
@@ -24,14 +89,18 @@
 * {
     box-sizing: border-box;
 }
+
 html, body {
-    height: 100%;
+  height: 100vh;
 }
 body {
-    margin: 0;
-    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    color: var(--text);
-    background: radial-gradient(1200px 600px at 10% -10%, rgba(66,179,255,0.06), transparent), var(--bg);
+  margin: 0;
+  font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(66,179,255,0.06), transparent), var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 
@@ -81,39 +150,36 @@ body {
     margin: 32px auto;
     padding: 0 20px;
 }
+
+/* Fullscreen map layout for oil-spill and flood-drought pages */
+
 .workspace {
-    display: grid;
-    grid-template-columns: 280px 1fr 340px;
-    gap: 14px;
-    padding: 14px;
-}
-.sidebar, .details {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .map-panel {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: var(--panel-2);
+  border-radius: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
-.map-canvas {
-    width: 100%;
-    height: calc(100vh - 180px);
-    background: repeating-conic-gradient(from 45deg, #101522 0 10deg, #0d121d 10deg 20deg);
-    border: 1px dashed var(--border);
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    position: relative;
-    overflow: hidden;
-}
-.map-canvas::after {
-    content: "Map placeholder (integrate Maps API later)";
-    color: var(--muted);
-    font-size: 14px;
+#map {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: repeating-conic-gradient(from 45deg, #101522 0 10deg, #0d121d 10deg 20deg);
+  position: relative;
 }
 
 /* Sidebar */

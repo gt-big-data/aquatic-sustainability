@@ -23,7 +23,7 @@
 
 <main class="workspace">
 <!-- Sidebar: controls (mirrors UML side panel concept) -->
-<aside class="sidebar">
+<!--<aside class="sidebar">
 <h2 class="sidebar-title">Controls</h2>
 <div class="control-group">
 <label for="regionSelect">Region</label>
@@ -49,11 +49,18 @@
 </div>
 <button id="btnApply" class="btn">Apply</button>
 <button id="btnReset" class="btn btn-outline">Reset</button>
-</aside>
+</aside>-->
 
 
 <!-- Main: map canvas placeholder -->
 <section class="map-panel">
+
+<div class="map-search-bar">
+  <form id="searchForm" autocomplete="off">
+    <input type="text" id="searchInput" placeholder="Search location..." />
+    <button type="submit" class="btn">Search</button>
+  </form>
+</div>
 <div id="map"></div>
 
   <script>
@@ -68,11 +75,29 @@
         document.head.appendChild(script);
       });
 
+    let map;
     function initMap() {
-      const map = new google.maps.Map(document.getElementById("map"), {
+      map = new google.maps.Map(document.getElementById("map"), {
         zoom: 5,
         center: { lat: 37.0, lng: -97.0 },
         mapTypeId: "terrain",
+      });
+
+      // Search bar logic
+      const form = document.getElementById('searchForm');
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const query = document.getElementById('searchInput').value;
+        if (!query) return;
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: query }, function(results, status) {
+          if (status === 'OK' && results[0]) {
+            map.setCenter(results[0].geometry.location);
+            map.setZoom(6);
+          } else {
+            alert('Location not found.');
+          }
+        });
       });
 
       // Fetch drought zones dynamically from Flask
@@ -116,18 +141,18 @@
 
 
 <!-- Right: annotation/results pane -->
-<aside class="details">
+<!--<aside class="details">
 <h2 class="sidebar-title">Annotations</h2>
 <div id="annotations" class="annotations">
 <p class="muted">Annotations will appear here (flood/drought vulnerability, affordability, incidents).</p>
 </div>
-</aside>
+</aside>-->
 </main>
 
 
-<footer class="site-footer">
+<!--<footer class="site-footer">
 <small>Flood/Drought Prediction · Prototype</small>
-</footer>
+</footer>-->
 
 
 <script src="/static/js/map.js" defer></script>
