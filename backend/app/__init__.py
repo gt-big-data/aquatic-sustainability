@@ -1,7 +1,8 @@
-from flask import Flask, send_from_directory, redirect, url_for
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from supabase import create_client
 from .config import Config
+import os
 
 supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
 
@@ -37,5 +38,33 @@ def create_app():
     @app.route("/water")
     def water():
         return send_from_directory(app.static_folder + "/pages", "water.html")
+
+    # Pages routes
+    @app.route("/pages/flood-drought.html")
+    def flood_drought():
+        return send_from_directory(app.static_folder, "pages/flood-drought.html")
+    
+    @app.route("/pages/oil-spill.html")
+    def oil_spill():
+        return send_from_directory(app.static_folder, "pages/oil-spill.html")
+    
+    @app.route("/pages/login.html")
+    def login():
+        return send_from_directory(app.static_folder, "pages/login.html")
+    
+    @app.route("/pages/register.html")
+    def register():
+        return send_from_directory(app.static_folder, "pages/register.html")
+    
+    # Serve static files (CSS, JS, images, etc.) from root paths
+    # This must be last to avoid intercepting specific routes
+    @app.route("/<path:filename>")
+    def serve_static(filename):
+        # Check if file exists in static folder
+        file_path = os.path.join(app.static_folder, filename)
+        if os.path.isfile(file_path):
+            return send_from_directory(app.static_folder, filename)
+        # Return 404 if file doesn't exist
+        return "File not found", 404
 
     return app
