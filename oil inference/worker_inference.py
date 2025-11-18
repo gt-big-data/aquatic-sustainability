@@ -108,35 +108,27 @@ def preprocess_chip(arr):
       - return shape (H, W, 1), dtype float32
     """
     arr = arr.astype(np.float32)
-    # replace zeros or negative values (could be nodata) by small eps
     arr[arr <= 0.0] = EPS
     db = 10.0 * np.log10(arr + EPS)
     db = np.clip(db, DB_MIN, DB_MAX)
-    norm = (db - DB_MIN) / (DB_MAX - DB_MIN)  # maps DB_MIN->0, DB_MAX->1
-    # ensure shape H,W,1
-    norm = np.expand_dims(norm, axis=-1).astype(np.float32)
+    # Scale to 0-255 to match training
+    norm = ((db - DB_MIN) / (DB_MAX - DB_MIN) * 255.0).astype(np.uint8)
+    # Repeat to 3 channels for RGB compatibility
+    norm = np.stack([norm, norm, norm], axis=-1)  # Shape: (H, W, 3)
     return norm
 
 def batch_predict(model, batch_array):
     """
-    model: loaded TF SavedModel (callable signature: serving_default)
-    batch_array: numpy array shape (N,H,W,1)
-    returns: numpy array of probabilities or model outputs (N,)
+    model: loaded Keras model
+    batch_array: numpy array shape (N,H,W,3)
+    returns: numpy array of probabilities for class 1 (oil) (N,)
     """
-    # model could have signatures; assume serving_default present
-    infer = model.signatures.get("serving_default", None)
-    if infer is None:
-        # model may be callable directly
-        preds = model(batch_array, training=False).numpy()
-        # assume binary classifier returning shape (N,1) or (N,)
-        preds = np.squeeze(preds)
-        return preds
-    # find input key
-    input_key = list(infer.structured_input_signature[1].keys())[0]
-    outputs = infer(tf.constant(batch_array))[list(infer.structured_outputs.keys())[0]]
-    preds = outputs.numpy()
-    preds = np.squeeze(preds)
-    return preds
+    logits = model(batch_array, training=False).numpy()
+    
+    # logits shape: (N, 2) - convert to probabilities
+    probs = tf.nn.softmax(logits, axis=1).numpy()
+    # Return probability of class 1 (oil)
+    return probs[:, 1]
 
 def save_result_json(results_dir, scene_id, tile_index, bbox_geo, datetime_acq, score):
     os.makedirs(results_dir, exist_ok=True)
@@ -165,8 +157,8 @@ def main():
     src = open_raster(href)
 
     # load TF model once
-    print("Loading TF SavedModel...")
-    model = tf.saved_model.load(args.saved_model)
+    print("Loading Keras model...")
+    model = tf.keras.models.load_model(args.saved_model)
     print("Model loaded.")
 
     chip_px = args.chip_px

@@ -20,7 +20,7 @@ from matplotlib.patches import Polygon as mplPolygon
 
 # PARAMETERS - adjust as needed
 STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
-START_DATE = "2025-09-01"
+START_DATE = "2025-10-01"
 END_DATE = "2025-11-01"  # Let's try a smaller range first, e.g., 2 months
 OUT_CSV = "scene_tasks.csv"
 OUT_MAP = "scene_coverage_map.png"
@@ -67,7 +67,7 @@ def main():
             collections=["sentinel-1-grd"],
             intersects=mapping(ocean),
             datetime=date_range_str,
-            max_items=500,
+            max_items=5000,
         )
         
         # Check how many items were found by the API for this query
