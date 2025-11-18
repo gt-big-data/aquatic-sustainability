@@ -5,6 +5,120 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Oil Spill Prediction · Aquatic Sustainability</title>
 <link rel="stylesheet" href="/static/css/styles.css" />
+<style>
+  /* Minimal floating filter overlay */
+  .filter-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    min-width: 250px;
+    backdrop-filter: blur(10px);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+
+  .filter-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .severity-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .severity-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .severity-checkbox:hover {
+    background: var(--bg);
+  }
+
+  .severity-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+
+  .severity-checkbox label {
+    flex: 1;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    user-select: none;
+  }
+
+  .severity-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .severity-indicator.high {
+    background-color: #ef4444;
+  }
+
+  .severity-indicator.medium {
+    background-color: #f59e0b;
+  }
+
+  .severity-indicator.low {
+    background-color: #22c55e;
+  }
+
+  .map-search-bar {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    width: 90%;
+    max-width: 400px;
+  }
+
+  .map-search-bar form {
+    display: flex;
+    gap: 8px;
+    background: var(--card-bg);
+    padding: 8px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  .map-search-bar input {
+    flex: 1;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  .map-search-bar input::placeholder {
+    color: var(--muted);
+  }
+
+  .map-search-bar button {
+    padding: 10px 20px;
+    white-space: nowrap;
+  }
+</style>
 </head>
 <body>
 <header class="site-header">
@@ -20,36 +134,7 @@
 </nav>
 </header>
 
-
 <main class="workspace">
-<!--<aside class="sidebar">
-<h2 class="sidebar-title">Controls</h2>
-<div class="control-group">
-<label for="marineZoneSelect">Marine Zone</label>
-<select id="marineZoneSelect">
-<option value="">Select a zone…</option>
-<option>North Atlantic</option>
-<option>Caribbean</option>
-<option>Pacific Northwest</option>
-<option>Custom (draw)</option>
-</select>
-</div>
-<div class="control-group">
-<label>Overlays</label>
-<label class="checkbox"><input type="checkbox" id="overlayTraffic" checked> Ship traffic</label>
-<label class="checkbox"><input type="checkbox" id="overlayWind" checked> Wind</label>
-<label class="checkbox"><input type="checkbox" id="overlayTemp"> SST</label>
-</div>
-<div class="control-group">
-<label for="confidence">Detection confidence</label>
-<input type="range" id="confidence" min="0" max="100" value="70" />
-<small><span id="confidenceLabel">70</span>%</small>
-</div>
-<button id="btnRunModel" class="btn">Run model</button>
-</aside>-->
-
-
-<!-- Main: map canvas -->
 <section class="map-panel">
 <div class="map-search-bar">
   <form id="searchForm" autocomplete="off">
@@ -57,333 +142,379 @@
     <button type="submit" class="btn">Search</button>
   </form>
 </div>
-<div id="map"></div>
-   <div id="spillModal" class="modal-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Oil Spill Details</h2>
-        <button class="modal-close" aria-label="Close modal">&times;</button>
-      </div>
-      <div class="modal-body" id="modalContent">
-        <!-- Content will be dynamically inserted here -->
-      </div>
+
+<!-- Minimal floating filter overlay -->
+<div class="filter-overlay">
+  <div class="filter-title">Severity Filter</div>
+  <div class="severity-filters">
+    <div class="severity-checkbox">
+      <input type="checkbox" id="highSeverity" checked />
+      <span class="severity-indicator high"></span>
+      <label for="highSeverity">High Severity</label>
+    </div>
+    <div class="severity-checkbox">
+      <input type="checkbox" id="mediumSeverity" checked />
+      <span class="severity-indicator medium"></span>
+      <label for="mediumSeverity">Medium Severity</label>
+    </div>
+    <div class="severity-checkbox">
+      <input type="checkbox" id="lowSeverity" checked />
+      <span class="severity-indicator low"></span>
+      <label for="lowSeverity">Low Severity</label>
     </div>
   </div>
+</div>
 
-  <script>
-    // Oil spill dummy data
-    const oilSpillData = [
-      {
-        id: 1,
-        name: "Gulf of Mexico Incident",
-        coordinates: { lat: 28.7378, lng: -88.3831 },
-        date: "2024-03-15",
-        time: "14:30 UTC",
-        amountSpilled: "4,200 barrels",
-        amountLiters: "667,800 L",
-        cause: "Pipeline rupture",
-        surfaceArea: "45.2 km²",
-        severity: "high",
-        affectedArea: "Coastal waters near Louisiana",
-        windSpeed: "12 knots NE",
-        seaTemp: "22.5°C",
-        responseStatus: "Active cleanup in progress",
-        estimatedDuration: "3-4 weeks"
-      },
-      {
-        id: 2,
-        name: "North Atlantic Detection",
-        coordinates: { lat: 41.2345, lng: -69.8765 },
-        date: "2024-03-18",
-        time: "09:15 UTC",
-        amountSpilled: "850 barrels",
-        amountLiters: "135,150 L",
-        cause: "Vessel collision",
-        surfaceArea: "12.8 km²",
-        severity: "medium",
-        affectedArea: "Open ocean, 45 nm from shore",
-        windSpeed: "8 knots SW",
-        seaTemp: "18.2°C",
-        responseStatus: "Containment deployed",
-        estimatedDuration: "1-2 weeks"
-      },
-      {
-        id: 3,
-        name: "Caribbean Spill Event",
-        coordinates: { lat: 18.4789, lng: -64.5432 },
-        date: "2024-03-20",
-        time: "16:45 UTC",
-        amountSpilled: "2,100 barrels",
-        amountLiters: "333,900 L",
-        cause: "Tanker hull breach",
-        surfaceArea: "28.5 km²",
-        severity: "high",
-        affectedArea: "Near Puerto Rico coast",
-        windSpeed: "15 knots E",
-        seaTemp: "26.8°C",
-        responseStatus: "Emergency response active",
-        estimatedDuration: "2-3 weeks"
-      },
-      {
-        id: 4,
-        name: "Pacific Northwest Detection",
-        coordinates: { lat: 47.6234, lng: -124.3456 },
-        date: "2024-03-22",
-        time: "11:20 UTC",
-        amountSpilled: "320 barrels",
-        amountLiters: "50,880 L",
-        cause: "Equipment failure",
-        surfaceArea: "5.7 km²",
-        severity: "low",
-        affectedArea: "Washington State waters",
-        windSpeed: "6 knots W",
-        seaTemp: "12.4°C",
-        responseStatus: "Contained",
-        estimatedDuration: "3-5 days"
-      },
-      {
-        id: 5,
-        name: "Atlantic Seaboard Incident",
-        coordinates: { lat: 35.8976, lng: -75.2341 },
-        date: "2024-03-25",
-        time: "07:50 UTC",
-        amountSpilled: "1,650 barrels",
-        amountLiters: "262,350 L",
-        cause: "Illegal discharge",
-        surfaceArea: "18.9 km²",
-        severity: "medium",
-        affectedArea: "Off North Carolina coast",
-        windSpeed: "10 knots N",
-        seaTemp: "16.7°C",
-        responseStatus: "Investigation ongoing",
-        estimatedDuration: "1-2 weeks"
+<div id="map"></div>
+<div id="spillModal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Oil Spill Details</h2>
+      <button class="modal-close" aria-label="Close modal">&times;</button>
+    </div>
+    <div class="modal-body" id="modalContent">
+      <!-- Content will be dynamically inserted here -->
+    </div>
+  </div>
+</div>
+
+<script>
+  let map;
+  let markers = [];
+  let showHigh = true;
+  let showMedium = true;
+  let showLow = true;
+
+  // Oil spill dummy data
+  const oilSpillData = [
+    {
+      id: 1,
+      name: "Gulf of Mexico Incident",
+      coordinates: { lat: 28.7378, lng: -88.3831 },
+      date: "2024-03-15",
+      time: "14:30 UTC",
+      amountSpilled: "4,200 barrels",
+      amountLiters: "667,800 L",
+      cause: "Pipeline rupture",
+      surfaceArea: "45.2 km²",
+      severity: "high",
+      affectedArea: "Coastal waters near Louisiana",
+      windSpeed: "12 knots NE",
+      seaTemp: "22.5°C",
+      responseStatus: "Active cleanup in progress",
+      estimatedDuration: "3-4 weeks"
+    },
+    {
+      id: 2,
+      name: "North Atlantic Detection",
+      coordinates: { lat: 41.2345, lng: -69.8765 },
+      date: "2024-03-18",
+      time: "09:15 UTC",
+      amountSpilled: "850 barrels",
+      amountLiters: "135,150 L",
+      cause: "Vessel collision",
+      surfaceArea: "12.8 km²",
+      severity: "medium",
+      affectedArea: "Open ocean, 45 nm from shore",
+      windSpeed: "8 knots SW",
+      seaTemp: "18.2°C",
+      responseStatus: "Containment deployed",
+      estimatedDuration: "1-2 weeks"
+    },
+    {
+      id: 3,
+      name: "Caribbean Spill Event",
+      coordinates: { lat: 18.4789, lng: -64.5432 },
+      date: "2024-03-20",
+      time: "16:45 UTC",
+      amountSpilled: "2,100 barrels",
+      amountLiters: "333,900 L",
+      cause: "Tanker hull breach",
+      surfaceArea: "28.5 km²",
+      severity: "high",
+      affectedArea: "Near Puerto Rico coast",
+      windSpeed: "15 knots E",
+      seaTemp: "26.8°C",
+      responseStatus: "Emergency response active",
+      estimatedDuration: "2-3 weeks"
+    },
+    {
+      id: 4,
+      name: "Pacific Northwest Detection",
+      coordinates: { lat: 47.6234, lng: -124.3456 },
+      date: "2024-03-22",
+      time: "11:20 UTC",
+      amountSpilled: "320 barrels",
+      amountLiters: "50,880 L",
+      cause: "Equipment failure",
+      surfaceArea: "5.7 km²",
+      severity: "low",
+      affectedArea: "Washington State waters",
+      windSpeed: "6 knots W",
+      seaTemp: "12.4°C",
+      responseStatus: "Contained",
+      estimatedDuration: "3-5 days"
+    },
+    {
+      id: 5,
+      name: "Atlantic Seaboard Incident",
+      coordinates: { lat: 35.8976, lng: -75.2341 },
+      date: "2024-03-25",
+      time: "07:50 UTC",
+      amountSpilled: "1,650 barrels",
+      amountLiters: "262,350 L",
+      cause: "Illegal discharge",
+      surfaceArea: "18.9 km²",
+      severity: "medium",
+      affectedArea: "Off North Carolina coast",
+      windSpeed: "10 knots N",
+      seaTemp: "16.7°C",
+      responseStatus: "Investigation ongoing",
+      estimatedDuration: "1-2 weeks"
+    }
+  ];
+
+  // Modal functions
+  function openModal(spillData) {
+    const modal = document.getElementById('spillModal');
+    const modalContent = document.getElementById('modalContent');
+
+    const severityClass = spillData.severity === 'high' ? 'danger' :
+      spillData.severity === 'medium' ? 'warning' : 'highlight';
+
+    modalContent.innerHTML = `
+      <div class="modal-section">
+        <h3>Location</h3>
+        <div class="modal-info-item">
+          <label>Incident Name</label>
+          <div class="value">${spillData.name}</div>
+        </div>
+        <div class="modal-info-item">
+          <label>Coordinates</label>
+          <div class="value">${spillData.coordinates.lat.toFixed(4)}°${spillData.coordinates.lat >= 0 ? 'N' : 'S'}, ${Math.abs(spillData.coordinates.lng).toFixed(4)}°${spillData.coordinates.lng >= 0 ? 'E' : 'W'}</div>
+          <div class="modal-map-coords">
+            Lat: ${spillData.coordinates.lat} | Lng: ${spillData.coordinates.lng}
+          </div>
+        </div>
+        <div class="modal-info-item">
+          <label>Affected Area</label>
+          <div class="value">${spillData.affectedArea}</div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Incident Details</h3>
+        <div class="modal-info-grid">
+          <div class="modal-info-item">
+            <label>Date Occurred</label>
+            <div class="value">${new Date(spillData.date).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Time</label>
+            <div class="value">${spillData.time}</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Severity</label>
+            <div class="value ${severityClass}">${spillData.severity.toUpperCase()}</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Cause</label>
+            <div class="value">${spillData.cause}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Spill Metrics</h3>
+        <div class="modal-info-grid">
+          <div class="modal-info-item">
+            <label>Amount Spilled</label>
+            <div class="value ${severityClass}">${spillData.amountSpilled}</div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">(${spillData.amountLiters})</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Surface Area</label>
+            <div class="value ${severityClass}">${spillData.surfaceArea}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Environmental Conditions</h3>
+        <div class="modal-info-grid">
+          <div class="modal-info-item">
+            <label>Wind Speed & Direction</label>
+            <div class="value">${spillData.windSpeed}</div>
+          </div>
+          <div class="modal-info-item">
+            <label>Sea Surface Temperature</label>
+            <div class="value">${spillData.seaTemp}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Response Status</h3>
+        <div class="modal-info-item">
+          <label>Current Status</label>
+          <div class="value">${spillData.responseStatus}</div>
+        </div>
+        <div class="modal-info-item">
+          <label>Estimated Cleanup Duration</label>
+          <div class="value">${spillData.estimatedDuration}</div>
+        </div>
+      </div>
+    `;
+
+    modal.classList.add('active');
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('spillModal');
+    modal.classList.remove('active');
+  }
+
+  function applyFilters() {
+    markers.forEach((markerData) => {
+      const { marker, spill } = markerData;
+      let visible = false;
+
+      if (spill.severity === 'high' && showHigh) visible = true;
+      if (spill.severity === 'medium' && showMedium) visible = true;
+      if (spill.severity === 'low' && showLow) visible = true;
+
+      marker.setVisible(visible);
+    });
+  }
+
+  // Initialize modal event listeners
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('spillModal');
+    const closeBtn = modal.querySelector('.modal-close');
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('active')) {
+        closeModal();
       }
-    ];
+    });
 
-    // Modal functions
-    function openModal(spillData) {
-      const modal = document.getElementById('spillModal');
-      const modalContent = document.getElementById('modalContent');
+    // Severity filter listeners
+    document.getElementById('highSeverity').addEventListener('change', (e) => {
+      showHigh = e.target.checked;
+      applyFilters();
+    });
 
-      const severityClass = spillData.severity === 'high' ? 'danger' :
-        spillData.severity === 'medium' ? 'warning' : 'highlight';
+    document.getElementById('mediumSeverity').addEventListener('change', (e) => {
+      showMedium = e.target.checked;
+      applyFilters();
+    });
 
-      modalContent.innerHTML = `
-        <div class="modal-section">
-          <h3>Location</h3>
-          <div class="modal-info-item">
-            <label>Incident Name</label>
-            <div class="value">${spillData.name}</div>
-          </div>
-          <div class="modal-info-item">
-            <label>Coordinates</label>
-            <div class="value">${spillData.coordinates.lat.toFixed(4)}°${spillData.coordinates.lat >= 0 ? 'N' : 'S'}, ${Math.abs(spillData.coordinates.lng).toFixed(4)}°${spillData.coordinates.lng >= 0 ? 'E' : 'W'}</div>
-            <div class="modal-map-coords">
-              Lat: ${spillData.coordinates.lat} | Lng: ${spillData.coordinates.lng}
-            </div>
-          </div>
-          <div class="modal-info-item">
-            <label>Affected Area</label>
-            <div class="value">${spillData.affectedArea}</div>
-          </div>
-        </div>
+    document.getElementById('lowSeverity').addEventListener('change', (e) => {
+      showLow = e.target.checked;
+      applyFilters();
+    });
+  });
 
-        <div class="modal-section">
-          <h3>Incident Details</h3>
-          <div class="modal-info-grid">
-            <div class="modal-info-item">
-              <label>Date Occurred</label>
-              <div class="value">${new Date(spillData.date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}</div>
-            </div>
-            <div class="modal-info-item">
-              <label>Time</label>
-              <div class="value">${spillData.time}</div>
-            </div>
-            <div class="modal-info-item">
-              <label>Severity</label>
-              <div class="value ${severityClass}">${spillData.severity.toUpperCase()}</div>
-            </div>
-            <div class="modal-info-item">
-              <label>Cause</label>
-              <div class="value">${spillData.cause}</div>
-            </div>
-          </div>
-        </div>
+  // Fetch Google Maps API key and initialize map
+  fetch("/api/config/maps-key")
+    .then(res => res.json())
+    .then(data => {
+      const apiKey = data.googleMapsApiKey || "DEMO_KEY";
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+      script.async = true;
+      document.head.appendChild(script);
+    });
 
-        <div class="modal-section">
-          <h3>Spill Metrics</h3>
-          <div class="modal-info-grid">
-            <div class="modal-info-item">
-              <label>Amount Spilled</label>
-              <div class="value ${severityClass}">${spillData.amountSpilled}</div>
-              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">(${spillData.amountLiters})</div>
-            </div>
-            <div class="modal-info-item">
-              <label>Surface Area</label>
-              <div class="value ${severityClass}">${spillData.surfaceArea}</div>
-            </div>
-          </div>
-        </div>
+  // Initialize Google Map with oil spill markers
+  function initMap() {
+    const center = { lat: 32.0, lng: -80.0 };
+    map = new google.maps.Map(document.getElementById("map"), {
+      zoom: 4,
+      center: center,
+    });
 
-        <div class="modal-section">
-          <h3>Environmental Conditions</h3>
-          <div class="modal-info-grid">
-            <div class="modal-info-item">
-              <label>Wind Speed & Direction</label>
-              <div class="value">${spillData.windSpeed}</div>
-            </div>
-            <div class="modal-info-item">
-              <label>Sea Surface Temperature</label>
-              <div class="value">${spillData.seaTemp}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-section">
-          <h3>Response Status</h3>
-          <div class="modal-info-item">
-            <label>Current Status</label>
-            <div class="value">${spillData.responseStatus}</div>
-          </div>
-          <div class="modal-info-item">
-            <label>Estimated Cleanup Duration</label>
-            <div class="value">${spillData.estimatedDuration}</div>
-          </div>
-        </div>
-      `;
-
-      modal.classList.add('active');
-    }
-
-    function closeModal() {
-      const modal = document.getElementById('spillModal');
-      modal.classList.remove('active');
-    }
-
-    // Initialize modal event listeners
-    document.addEventListener('DOMContentLoaded', () => {
-      const modal = document.getElementById('spillModal');
-      const closeBtn = modal.querySelector('.modal-close');
-
-      closeBtn.addEventListener('click', closeModal);
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-      });
-
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('active')) {
-          closeModal();
+    // Search bar logic
+    const form = document.getElementById('searchForm');
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const query = document.getElementById('searchInput').value;
+      if (!query) return;
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: query }, function(results, status) {
+        if (status === 'OK' && results[0]) {
+          map.setCenter(results[0].geometry.location);
+          map.setZoom(6);
+        } else {
+          alert('Location not found.');
         }
       });
     });
 
-    // Fetch Google Maps API key and initialize map
-    fetch("/api/config/maps-key")
-      .then(res => res.json())
-      .then(data => {
-        const apiKey = data.googleMapsApiKey || "DEMO_KEY";
-        const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
-        script.async = true;
-        document.head.appendChild(script);
+    // Create markers for each oil spill
+    oilSpillData.forEach(spill => {
+      // Determine marker color based on severity
+      let markerIcon = {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 10,
+        fillColor: spill.severity === 'high' ? '#ef4444' :
+                   spill.severity === 'medium' ? '#f59e0b' : '#22c55e',
+        fillOpacity: 0.8,
+        strokeColor: '#ffffff',
+        strokeWeight: 2
+      };
+
+      const marker = new google.maps.Marker({
+        position: spill.coordinates,
+        map: map,
+        title: spill.name,
+        icon: markerIcon,
+        animation: google.maps.Animation.DROP
       });
 
-    // Initialize Google Map with oil spill markers
-    let map;
-    function initMap() {
-      const center = { lat: 32.0, lng: -80.0 };
-      map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 4,
-        center: center,
+      // Add click listener to show popup
+      marker.addListener('click', () => {
+        openModal(spill);
       });
 
-      // Search bar logic
-      const form = document.getElementById('searchForm');
-      form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const query = document.getElementById('searchInput').value;
-        if (!query) return;
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ address: query }, function(results, status) {
-          if (status === 'OK' && results[0]) {
-            map.setCenter(results[0].geometry.location);
-            map.setZoom(6);
-          } else {
-            alert('Location not found.');
-          }
-        });
+      // Optional: Add info window on hover
+      const infoWindow = new google.maps.InfoWindow({
+        content: `<div style="padding: 8px;">
+                    <strong>${spill.name}</strong><br>
+                    <span style="color: ${spill.severity === 'high' ? '#ef4444' :
+                                           spill.severity === 'medium' ? '#f59e0b' : '#22c55e'};">
+                      ${spill.severity.toUpperCase()} Severity
+                    </span><br>
+                    ${spill.amountSpilled}<br>
+                    <em>Click for details</em>
+                  </div>`
       });
 
-      // Create markers for each oil spill
-      oilSpillData.forEach(spill => {
-        // Determine marker color based on severity
-        let markerIcon = {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: spill.severity === 'high' ? '#ef4444' :
-                     spill.severity === 'medium' ? '#f59e0b' : '#22c55e',
-          fillOpacity: 0.8,
-          strokeColor: '#ffffff',
-          strokeWeight: 2
-        };
-
-        const marker = new google.maps.Marker({
-          position: spill.coordinates,
-          map: map,
-          title: spill.name,
-          icon: markerIcon,
-          animation: google.maps.Animation.DROP
-        });
-
-        // Add click listener to show popup
-        marker.addListener('click', () => {
-          openModal(spill);
-        });
-
-        // Optional: Add info window on hover
-        const infoWindow = new google.maps.InfoWindow({
-          content: `<div style="padding: 8px;">
-                      <strong>${spill.name}</strong><br>
-                      <span style="color: ${spill.severity === 'high' ? '#ef4444' :
-                                             spill.severity === 'medium' ? '#f59e0b' : '#22c55e'};">
-                        ${spill.severity.toUpperCase()} Severity
-                      </span><br>
-                      ${spill.amountSpilled}<br>
-                      <em>Click for details</em>
-                    </div>`
-        });
-
-        marker.addListener('mouseover', () => {
-          infoWindow.open(map, marker);
-        });
-
-        marker.addListener('mouseout', () => {
-          infoWindow.close();
-        });
+      marker.addListener('mouseover', () => {
+        infoWindow.open(map, marker);
       });
-    }
-  </script>
+
+      marker.addListener('mouseout', () => {
+        infoWindow.close();
+      });
+
+      // Store marker for filtering
+      markers.push({ marker, spill });
+    });
+  }
+</script>
 
 </section>
-
-
-<!--<aside class="details">
-<h2 class="sidebar-title">Detections</h2>
-<div id="detections" class="annotations">
-<p class="muted">Model detections will render here with timestamps and extents.</p>
-</div>
-</aside>-->
 </main>
-
-<!--
-<footer class="site-footer">
-<small>Oil Spill Prediction · Prototype</small>
-</footer>-->
-
 
 <script src="/static/js/map.js" defer></script>
 <script src="/static/js/main.js" defer></script>
