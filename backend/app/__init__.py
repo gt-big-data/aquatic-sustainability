@@ -40,21 +40,21 @@ def create_app():
         return send_from_directory(app.static_folder + "/pages", "water.html")
 
     # Pages routes
-    @app.route("/pages/flood-drought.html")
-    def flood_drought():
-        return send_from_directory(app.static_folder, "pages/flood-drought.html")
+    #@app.route("/pages/flood-drought.html")
+    #def flood_drought():
+    #     return send_from_directory(app.static_folder, "pages/flood-drought.html")
     
-    @app.route("/pages/oil-spill.html")
-    def oil_spill():
-        return send_from_directory(app.static_folder, "pages/oil-spill.html")
+    # @app.route("/pages/oil-spill.html")
+    # def oil_spill():
+    #     return send_from_directory(app.static_folder, "pages/oil-spill.html")
     
-    @app.route("/pages/login.html")
-    def login():
-        return send_from_directory(app.static_folder, "pages/login.html")
+    # @app.route("/pages/login.html")
+    # def login():
+    #     return send_from_directory(app.static_folder, "pages/login.html")
     
-    @app.route("/pages/register.html")
-    def register():
-        return send_from_directory(app.static_folder, "pages/register.html")
+    # @app.route("/pages/register.html")
+    # def register():
+    #     return send_from_directory(app.static_folder, "pages/register.html")
     
     # Serve static files (CSS, JS, images, etc.) from root paths
     # This must be last to avoid intercepting specific routes
