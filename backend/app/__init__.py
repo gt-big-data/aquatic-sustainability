@@ -4,7 +4,14 @@ from supabase import create_client
 from .config import Config
 import os
 
-supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
+# Initialize supabase client only if credentials are available
+supabase = None
+if Config.SUPABASE_URL and Config.SUPABASE_ANON_KEY:
+    try:
+        supabase = create_client(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY)
+    except Exception as e:
+        print(f"Warning: Failed to initialize Supabase client: {e}")
+        supabase = None
 
 def create_app():
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
