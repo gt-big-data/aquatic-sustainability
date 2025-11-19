@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+my_env/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+README.md
+
+# Jupyter notebooks
+*.ipynb
+*.ipynb_checkpoints
+
+# Data files (if large, consider excluding)
+# *.csv
+# *.json
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Cloud Build
+cloudbuild.yaml
+
+# Other project files not needed in container
+Time Series Models/
+keras classifier/
+webpage/
+images/
+database/
+DummyData.csv
+tough_picture.jpg
+
