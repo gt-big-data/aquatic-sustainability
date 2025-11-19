@@ -33,6 +33,6 @@ EXPOSE 5000
 # Set the PORT environment variable (Cloud Run will override this)
 ENV PORT=5000
 
-# Run the application
-CMD ["python", "run.py"]
+# Run the application with gunicorn
+CMD exec gunicorn --bind :$PORT --workers 2 --threads 8 --timeout 0 run:app
 

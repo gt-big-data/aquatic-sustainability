@@ -26,6 +26,9 @@ def mongoDB_uri():
 @cross_origin(origins="https://aquatic-sustainability.vercel.app", methods=["POST", "OPTIONS"])
 def register():
     print("registering attempt now")
+    if not supabase:
+        return jsonify({"error": "Authentication service not configured"}), 503
+    
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
@@ -62,6 +65,9 @@ def register():
 
 @bp.route('/login', methods=['POST'])
 def login():
+    if not supabase:
+        return jsonify({"error": "Authentication service not configured"}), 503
+    
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
