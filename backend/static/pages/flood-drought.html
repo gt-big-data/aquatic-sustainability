@@ -457,81 +457,108 @@
 </div>
 
 <script>
+        // === Flood model request + rendering (uses Flask /api/flood-risk) ===
     async function requestFloodRisk(centerLat, centerLon) {
-      // 1) Start job
-      const startResp = await fetch('/api/flood-risk', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ lat: centerLat, lon: centerLon })
-      });
+      try {
+        const resp = await fetch('/api/flood-risk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: centerLat, lon: centerLon }),
+        });
 
-      const startData = await startResp.json();
-      if (!startResp.ok) {
-        console.error('Error starting job', startData);
-        alert('Error starting flood risk job: ' + (startData.error || 'unknown'));
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          console.error('Error from flood-risk API', data);
+          alert('Error running flood model: ' + (data.error || 'unknown'));
+          return;
+        }
+
+        if (!data.result) {
+          console.error('Unexpected flood-risk response shape', data);
+          alert('Flood model returned no result.');
+          return;
+        }
+
+        // data.result has shape:
+        // { center: {lat, lon}, points: [{lat, lon, prob, risk}, ...] }
+        renderFloodPointsOnMap(data.result);
+      } catch (err) {
+        console.error('Network or parsing error calling /api/flood-risk', err);
+        alert('Network error running flood model. Check console for details.');
+      }
+    }
+
+    // Google Maps circle overlays generated from the ML model
+    let map;
+    let modelCircles = [];
+    let floodPolygons = [];
+    let droughtPolygons = [];
+    let showFlood = true;
+    let showDrought = true;
+    let minProb = 0;
+    let maxProb = 100;
+
+    function renderFloodPointsOnMap(result) {
+      // Remove any existing model circles from the map
+      modelCircles.forEach(c => c.setMap(null));
+      modelCircles = [];
+
+      if (!result || !Array.isArray(result.points)) {
+        console.warn('renderFloodPointsOnMap: no points in result', result);
         return;
       }
 
-      const jobId = startData.job_id;
-
-      // 2) Poll until done
-      async function poll() {
-        const r = await fetch(`/api/flood-risk/${jobId}`);
-        const d = await r.json();
-
-        if (d.status === 'finished') {
-          // d.result = { center: {...}, points: [...] }
-          renderFloodPointsOnMap(d.result);
-        } else if (d.status === 'failed') {
-          alert('Flood job failed: ' + (d.error || 'unknown error'));
-        } else {
-          // queued / started
-          setTimeout(poll, 3000);
-        }
+      // Center map on model center
+      if (result.center && typeof result.center.lat === 'number' && typeof result.center.lon === 'number') {
+        map.setCenter({ lat: result.center.lat, lng: result.center.lon });
+        map.setZoom(8);
       }
 
-      poll();
-    }
-
-
-    // Example hook: when user clicks on the map, call requestFloodRisk
-    // map.on('click', function (e) {
-    //   const lat = e.latlng.lat;
-    //   const lon = e.latlng.lng;
-    //   requestFloodRisk(lat, lon);
-    // });
-
-    function renderFloodPointsOnMap(result) {
-      // result.center: {lat, lon}
-      // result.points: [{lat, lon, prob, risk}, ...]
-
-      // Clear existing markers if you track them
-      // ...
-
       result.points.forEach(p => {
-        const color =
-          p.risk === 'high' ? 'red' :
-          p.risk === 'medium' ? 'orange' :
-          'green';
+        const prob = typeof p.prob === 'number' ? p.prob : 0;
+        const probPct = prob * 100;
+        const risk = p.risk || 'low';
 
-        // Example with Leaflet circle markers:
-        L.circleMarker([p.lat, p.lon], {
-          radius: 4,
-          color: color,
+        const color =
+          risk === 'high' ? '#ef4444' :      // red
+          risk === 'medium' ? '#f97316' :    // orange
+          '#22c55e';                         // green
+
+        const center = { lat: p.lat, lng: p.lon }; // backend uses "lon"
+
+        const circle = new google.maps.Circle({
+          strokeColor: color,
+          strokeOpacity: 0.9,
+          strokeWeight: 1,
           fillColor: color,
-          fillOpacity: 0.7
-        }).bindPopup(`Flood prob: ${(p.prob * 100).toFixed(1)}%`).addTo(map);
+          fillOpacity: 0.35,
+          map,
+          center,
+          radius: 10000, // ~10 km radius, tweak if you want
+        });
+
+        // store metadata – useful if you later want filtering
+        circle._prob = probPct;
+        circle._risk = risk;
+
+        const info = new google.maps.InfoWindow({
+          content: `
+            <div style="font-size: 13px;">
+              <strong>Flood risk:</strong> ${probPct.toFixed(1)}% (${risk})<br/>
+              <strong>Lat/Lon:</strong> ${center.lat.toFixed(3)}, ${center.lng.toFixed(3)}
+            </div>
+          `,
+        });
+
+        circle.addListener('click', (e) => {
+          info.setPosition(e.latLng);
+          info.open(map);
+        });
+
+        modelCircles.push(circle);
       });
     }
-
-
-  let map;
-  let floodPolygons = [];
-  let droughtPolygons = [];
-  let showFlood = true;
-  let showDrought = true;
-  let minProb = 0;
-  let maxProb = 100;
 
   const floodData = [
     {
@@ -921,17 +948,19 @@
     });
   });
 
-  fetch("/api/config/maps-key")
+    fetch("/api/config/maps-key")
     .then(res => res.json())
     .then(data => {
       const apiKey = data.googleMapsApiKey || "DEMO_KEY";
       const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+      // NOTE: add libraries=places so we get autocomplete
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
       script.async = true;
       document.head.appendChild(script);
     });
 
-  function initMap() {
+
+    function initMap() {
     map = new google.maps.Map(document.getElementById("map"), {
       zoom: 5,
       center: { lat: 35.0, lng: -100.0 },
@@ -939,25 +968,74 @@
     });
 
     const form = document.getElementById('searchForm');
+    const searchInput = document.getElementById('searchInput');
+    const geocoder = new google.maps.Geocoder();
+    let autocompletePlace = null;
+
+    // === Google Places Autocomplete on the search box ===
+    if (google.maps.places) {
+  const autocomplete = new google.maps.places.Autocomplete(searchInput, {
+    fields: ['geometry', 'name', 'formatted_address'],
+    bounds: initialBounds,
+    strictBounds: true,
+  });
+
+  autocomplete.addListener('place_changed', () => {
+    autocompletePlace = autocomplete.getPlace();
+    if (!autocompletePlace.geometry || !autocompletePlace.geometry.location) {
+      return;  // submit handler will try geocoding text as fallback
+    }
+    const loc = autocompletePlace.geometry.location;
+    const lat = loc.lat();
+    const lng = loc.lng();
+
+    // optional: pre-center the map, but DO NOT call the model here
+    if (isInSEAsia(lat, lng)) {
+      map.setCenter(loc);
+      map.setZoom(7);
+    }
+    // ❌ DO NOT call requestFloodRisk here
+  });
+}
+
+
+    // === Handle manual "Enter" / click on the search button ===
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-      const query = document.getElementById('searchInput').value;
+      const query = searchInput.value.trim();
       if (!query) return;
-      const geocoder = new google.maps.Geocoder();
+
+      // If user selected a place from autocomplete, use its geometry
+      if (autocompletePlace && autocompletePlace.geometry && autocompletePlace.geometry.location) {
+        const loc = autocompletePlace.geometry.location;
+        const lat = loc.lat();
+        const lng = loc.lng();
+        map.setCenter(loc);
+        map.setZoom(8);
+        requestFloodRisk(lat, lng);
+        return;
+      }
+
+      // Otherwise fall back to plain geocoding on the text string
       geocoder.geocode({ address: query }, function(results, status) {
         if (status === 'OK' && results[0]) {
-          map.setCenter(results[0].geometry.location);
-          map.setZoom(6);
+          const loc = results[0].geometry.location;
+          const lat = loc.lat();
+          const lng = loc.lng();
+          map.setCenter(loc);
+          map.setZoom(8);
+          requestFloodRisk(lat, lng);
         } else {
           alert('Location not found.');
         }
       });
     });
 
+    // === Existing static polygons for flood / drought (keep as-is) ===
     floodData.forEach(zone => {
       const polygon = new google.maps.Polygon({
         paths: zone.coordinates,
-        strokeColor: '#3b82f6',
+        strokeColor: '#2563eb',
         strokeOpacity: 0.9,
         strokeWeight: 2,
         fillColor: '#3b82f6',
@@ -970,10 +1048,9 @@
       const infoWindow = new google.maps.InfoWindow({
         content: `<div style="padding:8px;">
                    <strong>${zone.name}</strong><br>
-                   <span style="color:#3b82f6;">💧 FLOOD ${zone.severity.toUpperCase()}</span><br>
                    Probability: ${zone.probability}%<br>
-                   <em>Click for details</em>
-                 </div>`
+                   Impact Score: ${zone.impactScore}/100
+                 </div>`,
       });
 
       polygon.addListener('mouseover', (e) => {
@@ -1001,10 +1078,9 @@
       const infoWindow = new google.maps.InfoWindow({
         content: `<div style="padding:8px;">
                    <strong>${zone.name}</strong><br>
-                   <span style="color:#f59e0b;">🌵 DROUGHT ${zone.severity.toUpperCase()}</span><br>
-                   Risk: ${zone.probability}%<br>
-                   <em>Click for details</em>
-                 </div>`
+                   Severity: ${zone.severity}/100<br>
+                   Impact Score: ${zone.impactScore}/100
+                 </div>`,
       });
 
       polygon.addListener('mouseover', (e) => {
@@ -1016,6 +1092,7 @@
       droughtPolygons.push(polygon);
     });
   }
+
 </script>
 
 <script src="/static/js/main.js" defer></script>

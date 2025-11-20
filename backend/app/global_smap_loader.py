@@ -125,7 +125,6 @@ def load_native_smap_file(path):
 
 
 
-from pyresample import geometry, kd_tree
 
 def reproject_to_025deg(da):
     """

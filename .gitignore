@@ -1,1 +1,10 @@
 .DS_Store
+# NASA / model caches
+backend/data/
+backend/gpm_temp/
+*.npy
+*.HDF5
+
+# Local config / secrets
+.env
+backend/.env

@@ -1,20 +1,22 @@
-from flask import Blueprint, current_app, request, jsonify, Flask
+from flask import Blueprint, current_app, request, jsonify
 from flask_cors import cross_origin
+from rq.job import Job
+
 from . import supabase
+from .tasks import run_flood_job
 import random
 
 bp = Blueprint("api", __name__)
 # app/routes.py
 
-from flask import Blueprint, current_app, request, jsonify
-from rq.job import Job
 
-from .tasks import run_flood_job
-
-main_bp = Blueprint("main", __name__)
-
-@main_bp.route("/api/flood-risk", methods=["POST"])
+@bp.route("/flood-risk", methods=["POST"])
 def start_flood_risk():
+    """
+    Synchronous flood risk endpoint (no Redis/RQ).
+    POST /api/flood-risk
+    Body: { "lat": <float>, "lon": <float> }
+    """
     data = request.get_json() or {}
     try:
         center_lat = float(data["lat"])
@@ -22,14 +24,27 @@ def start_flood_risk():
     except (KeyError, ValueError):
         return jsonify({"error": "lat and lon are required floats"}), 400
 
-    q = current_app.task_queue
-    job = q.enqueue(run_flood_job, center_lat, center_lon)
+    try:
+        # Directly run the job (this calls your model)
+        result = run_flood_job(center_lat, center_lon)
+    except Exception as e:
+        # Log full traceback to the Flask console
+        current_app.logger.exception("Error running flood job")
+        return jsonify({"error": "internal error running model"}), 500
 
-    return jsonify({"job_id": job.get_id()}), 202
+    # Return result immediately, no job_id / polling
+    return jsonify({
+        "status": "finished",
+        "result": result,
+    })
 
 
-@main_bp.route("/api/flood-risk/<job_id>", methods=["GET"])
+@bp.route("/flood-risk/<job_id>", methods=["GET"])
 def get_flood_risk(job_id):
+    """
+    Poll job status.
+    GET /api/flood-risk/<job_id>
+    """
     conn = current_app.redis
     try:
         job = Job.fetch(job_id, connection=conn)
@@ -38,18 +53,13 @@ def get_flood_risk(job_id):
 
     status = job.get_status()
     if status == "finished":
-        return jsonify({
-            "status": "finished",
-            "result": job.result
-        })
-    elif status == "failed":
-        return jsonify({
-            "status": "failed",
-            "error": str(job.exc_info),
-        }), 500
+        result = job.result
+        return jsonify({"status": "finished", "result": result})
+    elif status in ("queued", "started", "deferred"):
+        return jsonify({"status": status})
     else:
-        # queued / started / deferred
-        return jsonify({"status": status}), 202
+        return jsonify({"status": "failed"})
+
 
 @bp.route("/health")
 def health():
@@ -74,7 +84,7 @@ def register():
     print("registering attempt now")
     if not supabase:
         return jsonify({"error": "Authentication service not configured"}), 503
-    
+
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
@@ -113,7 +123,7 @@ def register():
 def login():
     if not supabase:
         return jsonify({"error": "Authentication service not configured"}), 503
-    
+
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
