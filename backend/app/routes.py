@@ -16,16 +16,15 @@ def maps_key():
     key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
     return {"googleMapsApiKey": key}
 
-@bp.route("/config/mongoDB-uri")
-def mongoDB_uri():
-    """Provide MongoDB connnection URI"""
-    key = current_app.config.get("MONGODB_URI", "")
-    return {"mongoDBUri": key}
+
 
 @bp.route('/register', methods=['POST'])
 @cross_origin(origins="https://aquatic-sustainability.vercel.app", methods=["POST", "OPTIONS"])
 def register():
     print("registering attempt now")
+    if not supabase:
+        return jsonify({"error": "Authentication service not configured"}), 503
+    
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
@@ -62,6 +61,9 @@ def register():
 
 @bp.route('/login', methods=['POST'])
 def login():
+    if not supabase:
+        return jsonify({"error": "Authentication service not configured"}), 503
+    
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')

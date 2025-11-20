@@ -4,23 +4,95 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Aquatic Sustainability</title>
-<link rel="icon" href="./assets/images/logo.svg" />
-<link rel="stylesheet" href="./css/styles.css" />
+<link rel="icon" href="assets/images/favicon.ico" />
+<link rel="stylesheet" href="/static/css/styles.css" />
 <meta name="description" content="Analyzing watershed anomalies and water affordability to protect at-risk communities and support UN Clean Water goals." />
+<style>
+  body {
+    background-image: url('/static/assets/images/Algal-Bloom.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    z-index: -1;
+    transition: background-color 0.3s ease;
+  }
+
+  html:not(.light) body::before {
+    background: rgba(10, 10, 10, 0.85);
+  }
+
+  .site-header {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px);
+    transition: background-color 0.3s ease;
+  }
+
+  html:not(.light) .site-header {
+    background: rgba(26, 26, 26, 0.95) !important;
+  }
+
+  .hero {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+    padding: 48px 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  html:not(.light) .hero {
+    background: rgba(26, 26, 26, 0.9);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .cards {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  html:not(.light) .cards {
+    background: rgba(26, 26, 26, 0.9);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+</style>
 </head>
 <body>
 <header class="site-header">
 <a class="brand" href="./">
-<img src="./assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+<img src="/static/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
 <span class="brand-title">Aquatic Sustainability</span>
 </a>
 <nav class="top-nav">
-<a href="./pages/flood-drought.html">Flood/Drought</a>
-<a href="./pages/oil-spill.html">Oil Spill</a>
-<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
-<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
+  <a href="/flood-drought">Flood/Drought</a>
+  <a href="/oil-spill">Oil Spill</a>
+  <button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+
+  <!-- Optional auth UI -->
+  <a href="/login" id="loginLink" class="btn btn-outline" style="float:right; margin-left:1em;">
+    Login
+  </a>
+  <a href="/login" id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em; display:none;">
+    Logout
+  </a>
 </nav>
+
 </header>
+
 
 
 <main class="container narrow">
@@ -30,22 +102,25 @@
 Analyzing watershed anomalies and water affordability patterns to protect at‑risk communities and support UN Clean Water goals.
 </p>
 <div class="cta-row">
-<a class="btn" href="./pages/flood-drought.html">Explore Flood/Drought</a>
-<a class="btn btn-outline" href="./pages/oil-spill.html">Explore Oil Spill</a>
+<a class="btn" href="/flood-drought">Explore Flood/Drought</a>
+<a class="btn btn-outline" href="/oil-spill">Explore Oil Spill</a>
 </div>
 </section>
 
+<section class="description">
+  <h3><strong>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</strong></h3>
+</section>
 
 <section class="cards">
 <article class="card">
 <h2>Flood/Drought Vulnerability</h2>
 <p>View predicted flood/drought risk and overlay affordability & incident annotations.</p>
-<a class="card-link" href="./pages/flood-drought.html">Open tool →</a>
+<a class="card-link" href="/flood-drought">Open tool →</a>
 </article>
 <article class="card">
 <h2>Oil Spill Detection</h2>
 <p>Investigate near‑real‑time spill detections and patterns across marine regions.</p>
-<a class="card-link" href="./pages/oil-spill.html">Open tool →</a>
+<a class="card-link" href="/oil-spoil">Open tool →</a>
 </article>
 </section>
 </main>
@@ -56,6 +131,6 @@ Analyzing watershed anomalies and water affordability patterns to protect at‑r
 </footer>
 
 
-<script src="js/main.js" defer></script>
+<script src="/static/js/main.js" defer></script>
 </body>
 </html>

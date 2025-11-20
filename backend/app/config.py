@@ -10,4 +10,4 @@ class Config:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
-    MONGODB_URI = os.getenv("MONGODB_URI", "")
+

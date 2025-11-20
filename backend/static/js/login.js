@@ -21,7 +21,7 @@ if (loginForm) {
                 // store token if present
                 if (data && data.access_token) localStorage.setItem("access_token", data.access_token);
                 // simple UX: redirect to root (adjust as needed)
-                window.location.href = "../index.html";
+                window.location.href = "/";
             } else {
                 const msg = (data && (data.error || data.message)) || `Login failed (${res.status})`;
                 alert(msg);
