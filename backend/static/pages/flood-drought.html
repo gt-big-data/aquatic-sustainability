@@ -6,7 +6,6 @@
 <title>Flood/Drought Prediction · Aquatic Sustainability</title>
 <link rel="stylesheet" href="/static/css/styles.css" />
 <style>
-  /* Color-matched themes */
   :root {
     --flood-color: #3b82f6;
     --flood-light: #60a5fa;
@@ -16,7 +15,6 @@
     --drought-dark: #d97706;
   }
 
-  /* Minimal floating filter overlay */
   .filter-overlay {
     position: absolute;
     top: 20px;
@@ -127,7 +125,6 @@
     color: white;
   }
 
-  /* Modal styling */
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -422,7 +419,6 @@
   </form>
 </div>
 
-<!-- Minimal floating filter overlay -->
 <div class="filter-overlay">
   <div class="filter-title">Probability Filter</div>
   <div class="filter-row">
@@ -445,7 +441,6 @@
 </section>
 </main>
 
-<!-- Modal -->
 <div id="dataModal" class="modal-overlay">
   <div class="modal" id="modalElement">
     <div class="modal-header">
@@ -457,7 +452,135 @@
 </div>
 
 <script>
-        // === Flood model request + rendering (uses Flask /api/flood-risk) ===
+    // Simple landmask check using coastline approximation
+  function isOnLand(lat, lng) {
+  // Southeast Asia region: roughly 10°S to 30°N, 90°E to 150°E
+  
+  // Quick check: if outside Southeast Asia region, use basic ocean filter
+  if (lng < 90 || lng > 150 || lat < -10 || lat > 30) {
+    // Basic global ocean exclusions for queries outside SE Asia
+    // Pacific Ocean (far from land)
+    if (lat > -60 && lat < 60 && lng > 150 && lng < -100) return false;
+    // Atlantic Ocean (middle)
+    if (lat > 0 && lat < 60 && lng > -50 && lng < -20 && lat > 10 && lat < 40) return false;
+    // Indian Ocean (middle)
+    if (lat > -40 && lat < 0 && lng > 50 && lng < 90) return false;
+    // Arctic Ocean
+    if (lat > 80) return false;
+    // Antarctica
+    if (lat < -60) return false;
+    return true; // Default to land
+  }
+  
+  // === Southeast Asia Detailed Landmask ===
+  
+  // South China Sea (major water body to exclude)
+  if (lat >= 0 && lat <= 23 && lng >= 105 && lng <= 120) {
+    // This is the middle of South China Sea - mostly water
+    // But exclude areas near coastlines
+    if (lat >= 3 && lat <= 20 && lng >= 108 && lng <= 117) {
+      // Deep South China Sea
+      if (lat >= 7 && lat <= 17 && lng >= 110 && lng <= 115) {
+        return false; // Open water
+      }
+    }
+  }
+  
+  // Gulf of Thailand
+  if (lat >= 6 && lat <= 13 && lng >= 99 && lng <= 104) {
+    // Middle of gulf
+    if (lat >= 8 && lat <= 11 && lng >= 100.5 && lng <= 102.5) {
+      return false;
+    }
+  }
+  
+  // Andaman Sea (west of Thailand)
+  if (lat >= 4 && lat <= 14 && lng >= 92 && lng <= 99) {
+    // Deep Andaman Sea
+    if (lat >= 6 && lat <= 12 && lng >= 94 && lng <= 97) {
+      return false;
+    }
+  }
+  
+  // Bay of Bengal (west of Myanmar)
+  if (lat >= 5 && lat <= 22 && lng >= 80 && lng <= 95) {
+    // Deep bay area
+    if (lat >= 8 && lat <= 18 && lng >= 85 && lng <= 92) {
+      return false;
+    }
+  }
+  
+  // Celebes Sea (between Philippines and Indonesia)
+  if (lat >= 0 && lat <= 8 && lng >= 118 && lng <= 126) {
+    // Open Celebes Sea
+    if (lat >= 2 && lat <= 6 && lng >= 120 && lng <= 124) {
+      return false;
+    }
+  }
+  
+  // Sulu Sea (Philippines)
+  if (lat >= 5 && lat <= 10 && lng >= 119 && lng <= 122) {
+    // Middle of Sulu Sea
+    if (lat >= 6.5 && lat <= 8.5 && lng >= 120 && lng <= 121) {
+      return false;
+    }
+  }
+  
+  // Java Sea (between Java and Borneo)
+  if (lat >= -7 && lat <= 0 && lng >= 107 && lng <= 117) {
+    // Open Java Sea
+    if (lat >= -5 && lat <= -2 && lng >= 110 && lng <= 114) {
+      return false;
+    }
+  }
+  
+  // Banda Sea (eastern Indonesia)
+  if (lat >= -8 && lat <= 0 && lng >= 120 && lng <= 132) {
+    // Deep Banda Sea
+    if (lat >= -6 && lat <= -2 && lng >= 124 && lng <= 130) {
+      return false;
+    }
+  }
+  
+  // Arafura Sea (between Indonesia and Australia)
+  if (lat >= -10 && lat <= -5 && lng >= 130 && lng <= 142) {
+    return false; // Mostly open water
+  }
+  
+  // Timor Sea
+  if (lat >= -13 && lat <= -8 && lng >= 123 && lng <= 132) {
+    return false;
+  }
+  
+  // Philippine Sea (east of Philippines)
+  if (lat >= 5 && lat <= 20 && lng >= 125 && lng <= 135) {
+    // Open Philippine Sea
+    if (lat >= 8 && lat <= 18 && lng >= 128 && lng <= 133) {
+      return false;
+    }
+  }
+  
+  // Pacific Ocean (far east of Philippines)
+  if (lng >= 135 && lat >= -10 && lat <= 30) {
+    return false;
+  }
+  
+  // Indian Ocean (southwest of Indonesia)
+  if (lat <= -5 && lng <= 105) {
+    return false;
+  }
+  
+  // Far south Indian Ocean (south of Indonesia)
+  if (lat <= -10 && lng >= 95 && lng <= 125) {
+    return false;
+  }
+  
+  // Default to land for Southeast Asia region
+  // This conservative approach prefers false positives (showing coastal water points)
+  // over false negatives (hiding land points)
+  return true;
+  }
+
     async function requestFloodRisk(centerLat, centerLon) {
       try {
         const resp = await fetch('/api/flood-risk', {
@@ -480,8 +603,6 @@
           return;
         }
 
-        // data.result has shape:
-        // { center: {lat, lon}, points: [{lat, lon, prob, risk}, ...] }
         renderFloodPointsOnMap(data.result);
       } catch (err) {
         console.error('Network or parsing error calling /api/flood-risk', err);
@@ -489,7 +610,6 @@
       }
     }
 
-    // Google Maps circle overlays generated from the ML model
     let map;
     let modelCircles = [];
     let floodPolygons = [];
@@ -500,7 +620,7 @@
     let maxProb = 100;
 
     function renderFloodPointsOnMap(result) {
-      // Remove any existing model circles from the map
+      // Remove existing circles
       modelCircles.forEach(c => c.setMap(null));
       modelCircles = [];
 
@@ -509,36 +629,42 @@
         return;
       }
 
-      // Center map on model center
+      // Center map
       if (result.center && typeof result.center.lat === 'number' && typeof result.center.lon === 'number') {
         map.setCenter({ lat: result.center.lat, lng: result.center.lon });
-        map.setZoom(8);
+        map.setZoom(9);
       }
 
-      result.points.forEach(p => {
+      // Filter points to only include those on land
+      const landPoints = result.points.filter(p => isOnLand(p.lat, p.lon));
+      
+      console.log(`[LANDMASK] Filtered ${result.points.length} points to ${landPoints.length} land points`);
+
+      landPoints.forEach(p => {
         const prob = typeof p.prob === 'number' ? p.prob : 0;
         const probPct = prob * 100;
         const risk = p.risk || 'low';
 
+        // Updated color scheme with yellow for warning
         const color =
-          risk === 'high' ? '#ef4444' :      // red
-          risk === 'medium' ? '#f97316' :    // orange
-          '#22c55e';                         // green
+          risk === 'high' ? '#ef4444' :        // red (>= 0.75)
+          risk === 'warning' ? '#fbbf24' :     // yellow (0.5 - 0.75)
+          risk === 'medium' ? '#fb923c' :      // orange (0.3 - 0.5)
+          '#22c55e';                           // green (< 0.3)
 
-        const center = { lat: p.lat, lng: p.lon }; // backend uses "lon"
+        const center = { lat: p.lat, lng: p.lon };
 
         const circle = new google.maps.Circle({
           strokeColor: color,
           strokeOpacity: 0.9,
-          strokeWeight: 1,
+          strokeWeight: 1.5,
           fillColor: color,
-          fillOpacity: 0.35,
+          fillOpacity: 0.4,
           map,
           center,
-          radius: 10000, // ~10 km radius, tweak if you want
+          radius: 3000, // Smaller radius for better circular appearance
         });
 
-        // store metadata – useful if you later want filtering
         circle._prob = probPct;
         circle._risk = risk;
 
@@ -953,12 +1079,10 @@
     .then(data => {
       const apiKey = data.googleMapsApiKey || "DEMO_KEY";
       const script = document.createElement("script");
-      // NOTE: add libraries=places so we get autocomplete
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
       script.async = true;
       document.head.appendChild(script);
     });
-
 
     function initMap() {
     map = new google.maps.Map(document.getElementById("map"), {
@@ -972,40 +1096,30 @@
     const geocoder = new google.maps.Geocoder();
     let autocompletePlace = null;
 
-    // === Google Places Autocomplete on the search box ===
     if (google.maps.places) {
-  const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-    fields: ['geometry', 'name', 'formatted_address'],
-    bounds: initialBounds,
-    strictBounds: true,
-  });
+      const autocomplete = new google.maps.places.Autocomplete(searchInput, {
+        fields: ['geometry', 'name', 'formatted_address'],
+      });
 
-  autocomplete.addListener('place_changed', () => {
-    autocompletePlace = autocomplete.getPlace();
-    if (!autocompletePlace.geometry || !autocompletePlace.geometry.location) {
-      return;  // submit handler will try geocoding text as fallback
+      autocomplete.addListener('place_changed', () => {
+        autocompletePlace = autocomplete.getPlace();
+        if (!autocompletePlace.geometry || !autocompletePlace.geometry.location) {
+          return;
+        }
+        const loc = autocompletePlace.geometry.location;
+        const lat = loc.lat();
+        const lng = loc.lng();
+
+        map.setCenter(loc);
+        map.setZoom(7);
+      });
     }
-    const loc = autocompletePlace.geometry.location;
-    const lat = loc.lat();
-    const lng = loc.lng();
 
-    // optional: pre-center the map, but DO NOT call the model here
-    if (isInSEAsia(lat, lng)) {
-      map.setCenter(loc);
-      map.setZoom(7);
-    }
-    // ❌ DO NOT call requestFloodRisk here
-  });
-}
-
-
-    // === Handle manual "Enter" / click on the search button ===
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       const query = searchInput.value.trim();
       if (!query) return;
 
-      // If user selected a place from autocomplete, use its geometry
       if (autocompletePlace && autocompletePlace.geometry && autocompletePlace.geometry.location) {
         const loc = autocompletePlace.geometry.location;
         const lat = loc.lat();
@@ -1016,7 +1130,6 @@
         return;
       }
 
-      // Otherwise fall back to plain geocoding on the text string
       geocoder.geocode({ address: query }, function(results, status) {
         if (status === 'OK' && results[0]) {
           const loc = results[0].geometry.location;
@@ -1031,7 +1144,6 @@
       });
     });
 
-    // === Existing static polygons for flood / drought (keep as-is) ===
     floodData.forEach(zone => {
       const polygon = new google.maps.Polygon({
         paths: zone.coordinates,
@@ -1049,7 +1161,6 @@
         content: `<div style="padding:8px;">
                    <strong>${zone.name}</strong><br>
                    Probability: ${zone.probability}%<br>
-                   Impact Score: ${zone.impactScore}/100
                  </div>`,
       });
 
@@ -1079,7 +1190,6 @@
         content: `<div style="padding:8px;">
                    <strong>${zone.name}</strong><br>
                    Severity: ${zone.severity}/100<br>
-                   Impact Score: ${zone.impactScore}/100
                  </div>`,
       });
 
