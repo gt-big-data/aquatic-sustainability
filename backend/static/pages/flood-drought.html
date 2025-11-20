@@ -858,7 +858,7 @@
     .then(data => {
       const apiKey = data.googleMapsApiKey || "DEMO_KEY";
       const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
       script.async = true;
       document.head.appendChild(script);
     });
@@ -946,6 +946,10 @@
       polygon.addListener('mouseout', () => infoWindow.close());
 
       droughtPolygons.push(polygon);
+    });
+
+    const input = document.getElementById('searchInput');
+    const autocomplete = new google.maps.places.Autocomplete(input, {
     });
   }
 </script>
