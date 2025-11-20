@@ -1,2 +1,26 @@
 .env
 .idea/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# IDE
+.vscode/
+
+# Redis
+dump.rdb
+
+# SMAP & Model cache
+data/
+*.npy
+*.h5
+*.pt
+
+# Flask session / logs
+instance/
+*.log

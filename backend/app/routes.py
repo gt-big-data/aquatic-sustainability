@@ -4,6 +4,52 @@ from . import supabase
 import random
 
 bp = Blueprint("api", __name__)
+# app/routes.py
+
+from flask import Blueprint, current_app, request, jsonify
+from rq.job import Job
+
+from .tasks import run_flood_job
+
+main_bp = Blueprint("main", __name__)
+
+@main_bp.route("/api/flood-risk", methods=["POST"])
+def start_flood_risk():
+    data = request.get_json() or {}
+    try:
+        center_lat = float(data["lat"])
+        center_lon = float(data["lon"])
+    except (KeyError, ValueError):
+        return jsonify({"error": "lat and lon are required floats"}), 400
+
+    q = current_app.task_queue
+    job = q.enqueue(run_flood_job, center_lat, center_lon)
+
+    return jsonify({"job_id": job.get_id()}), 202
+
+
+@main_bp.route("/api/flood-risk/<job_id>", methods=["GET"])
+def get_flood_risk(job_id):
+    conn = current_app.redis
+    try:
+        job = Job.fetch(job_id, connection=conn)
+    except Exception:
+        return jsonify({"error": "Job not found"}), 404
+
+    status = job.get_status()
+    if status == "finished":
+        return jsonify({
+            "status": "finished",
+            "result": job.result
+        })
+    elif status == "failed":
+        return jsonify({
+            "status": "failed",
+            "error": str(job.exc_info),
+        }), 500
+    else:
+        # queued / started / deferred
+        return jsonify({"status": status}), 202
 
 @bp.route("/health")
 def health():

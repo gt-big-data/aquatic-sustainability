@@ -3,7 +3,10 @@ from flask_cors import CORS
 from supabase import create_client
 from .config import Config
 import os
+from redis import Redis
+from rq import Queue
 
+redis_conn = None
 # Initialize supabase client only if credentials are available
 supabase = None
 if Config.SUPABASE_URL and Config.SUPABASE_ANON_KEY:
@@ -73,5 +76,15 @@ def create_app():
             return send_from_directory(app.static_folder, filename)
         # Return 404 if file doesn't exist
         return "File not found", 404
+
+    global redis_conn
+    redis_conn = Redis.from_url(app.config['REDIS_URL'])
+
+    app.redis = redis_conn
+    app.task_queue = Queue(
+        app.config.get('RQ_DEFAULT_QUEUE', 'flood-jobs'),
+        connection=redis_conn
+        # job_timeout='15m'  # optional, if SMAP downloads are long
+    )
 
     return app

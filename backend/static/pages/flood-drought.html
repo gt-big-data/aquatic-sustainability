@@ -457,6 +457,74 @@
 </div>
 
 <script>
+    async function requestFloodRisk(centerLat, centerLon) {
+      // 1) Start job
+      const startResp = await fetch('/api/flood-risk', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ lat: centerLat, lon: centerLon })
+      });
+
+      const startData = await startResp.json();
+      if (!startResp.ok) {
+        console.error('Error starting job', startData);
+        alert('Error starting flood risk job: ' + (startData.error || 'unknown'));
+        return;
+      }
+
+      const jobId = startData.job_id;
+
+      // 2) Poll until done
+      async function poll() {
+        const r = await fetch(`/api/flood-risk/${jobId}`);
+        const d = await r.json();
+
+        if (d.status === 'finished') {
+          // d.result = { center: {...}, points: [...] }
+          renderFloodPointsOnMap(d.result);
+        } else if (d.status === 'failed') {
+          alert('Flood job failed: ' + (d.error || 'unknown error'));
+        } else {
+          // queued / started
+          setTimeout(poll, 3000);
+        }
+      }
+
+      poll();
+    }
+
+
+    // Example hook: when user clicks on the map, call requestFloodRisk
+    // map.on('click', function (e) {
+    //   const lat = e.latlng.lat;
+    //   const lon = e.latlng.lng;
+    //   requestFloodRisk(lat, lon);
+    // });
+
+    function renderFloodPointsOnMap(result) {
+      // result.center: {lat, lon}
+      // result.points: [{lat, lon, prob, risk}, ...]
+
+      // Clear existing markers if you track them
+      // ...
+
+      result.points.forEach(p => {
+        const color =
+          p.risk === 'high' ? 'red' :
+          p.risk === 'medium' ? 'orange' :
+          'green';
+
+        // Example with Leaflet circle markers:
+        L.circleMarker([p.lat, p.lon], {
+          radius: 4,
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.7
+        }).bindPopup(`Flood prob: ${(p.prob * 100).toFixed(1)}%`).addTo(map);
+      });
+    }
+
+
   let map;
   let floodPolygons = [];
   let droughtPolygons = [];
