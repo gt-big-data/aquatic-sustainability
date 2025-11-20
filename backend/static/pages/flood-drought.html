@@ -888,7 +888,7 @@
       geocoder.geocode({ address: query }, function(results, status) {
         if (status === 'OK' && results[0]) {
           map.setCenter(results[0].geometry.location);
-          map.setZoom(6);
+          map.setZoom(12);
         } else {
           alert('Location not found.');
         }
