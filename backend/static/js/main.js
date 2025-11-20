@@ -15,28 +15,33 @@ document.addEventListener('DOMContentLoaded', () => {
 		});
 	}
 
-	// Logout button logic (add to all protected pages)
+	// Logout button logic (optional auth)
 	const logoutBtn = document.getElementById('logoutBtn');
+	const loginLink = document.getElementById('loginLink');
+	const token = localStorage.getItem('access_token');
+
 	if (logoutBtn) {
 		logoutBtn.addEventListener('click', () => {
 			localStorage.removeItem('access_token');
+			// After logout, send them to login
 			window.location.href = '/login';
 		});
 	}
 
-	// Protect all pages except login/register
+	// Toggle auth UI but do NOT force redirect if no token
+	if (token) {
+		if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+		if (loginLink) loginLink.style.display = 'inline-flex'; // will hide below for login/register
+	} else {
+		if (logoutBtn) logoutBtn.style.display = 'none';
+		if (loginLink) loginLink.style.display = 'inline-flex';
+	}
+
+	// If already logged in and on login/register, redirect to home
 	const isLogin = window.location.pathname.includes('/login');
 	const isRegister = window.location.pathname.includes('/register');
-	const token = localStorage.getItem('access_token');
-	if (!isLogin && !isRegister) {
-		// Protected page: redirect to login if not authenticated
-		if (!token) {
-			window.location.href = '/login';
-		}
-	} else {
-		// If on login or register and already authenticated, redirect to index
-		if (token) {
-			window.location.href = '/';
-		}
+	if (token && (isLogin || isRegister)) {
+		window.location.href = '/';
 	}
+
 });

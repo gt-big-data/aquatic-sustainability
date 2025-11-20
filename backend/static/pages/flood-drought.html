@@ -401,17 +401,25 @@
 </head>
 <body>
 <header class="site-header">
-<a class="brand" href="../">
-<img src="/static/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
-<span class="brand-title">Aquatic Sustainability</span>
-</a>
-<nav class="top-nav">
-<a class="active" href="/flood-drought">Flood/Drought</a>
-<a href="/oil-spill">Oil Spill</a>
-<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
-<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
-</nav>
+  <a class="brand" href="../">
+    <img src="/static/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+    <span class="brand-title">Aquatic Sustainability</span>
+  </a>
+  <nav class="top-nav">
+    <a class="active" href="/flood-drought">Flood/Drought</a>
+    <a href="/oil-spill">Oil Spill</a>
+    <button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+
+    <!-- Optional auth UI -->
+    <a href="/login" id="loginLink" class="btn btn-outline" style="float:right; margin-left:1em;">
+      Login
+    </a>
+    <button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em; display:none;">
+      Logout
+    </button>
+  </nav>
 </header>
+
 
 <main class="workspace">
 <section class="map-panel">
