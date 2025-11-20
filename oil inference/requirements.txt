@@ -6,3 +6,4 @@ geopandas
 shapely
 tensorflow  # match TF version you use on PACE; adjust as needed
 tqdm
+global-land-mask

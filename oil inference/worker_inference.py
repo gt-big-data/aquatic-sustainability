@@ -29,6 +29,7 @@ from rasterio.errors import RasterioIOError
 from urllib.parse import urlparse
 import planetary_computer
 from PIL import Image
+from global_land_mask import globe
 
 # PARAMETERS
 EPS = 1e-6
@@ -200,6 +201,31 @@ def calculate_chip_bbox_geo(scene_bbox, chip_bbox_pixel, raster_width, raster_he
     
     return [chip_lon_min, chip_lat_min, chip_lon_max, chip_lat_max]
 
+def bbox_on_land(bbox_geo):
+    """
+    Check if bbox intersects with land by checking corners and center.
+    """
+    chip_lon_min, chip_lat_min, chip_lon_max, chip_lat_max = bbox_geo
+    
+    # Calculate center
+    center_lat = (chip_lat_min + chip_lat_max) / 2
+    center_lon = (chip_lon_min + chip_lon_max) / 2
+    
+    # Check corners and center
+    points = [
+        (chip_lat_max, chip_lon_min),  # top-left
+        (chip_lat_max, chip_lon_max),  # top-right
+        (chip_lat_min, chip_lon_min),  # bottom-left
+        (chip_lat_min, chip_lon_max),  # bottom-right
+        (center_lat, center_lon),      # center
+    ]
+    
+    for lat, lon in points:
+        if globe.is_land(lat, lon):
+            return True
+    
+    return False
+
 def main():
     args = parse_args()
     row = load_scene_row(args.scene_csv, args.row_index)
@@ -257,28 +283,8 @@ def main():
         if np.all(arr == 0) or np.nanstd(arr) < 1e-6:
             tile_idx += 1
             continue
-
-        proc = preprocess_chip(arr)  # shape (H,W,3)
         
-        # After first chip preprocessing
-        # if tile_idx % 1000 == 0:
-        #     print(f"\n=== PREPROCESSING DIAGNOSTICS ===")
-        #     print(f"Raw SAR - min: {np.min(arr):.6f}, max: {np.max(arr):.6f}, mean: {np.mean(arr):.6f}")
-        #     db_test = 10.0 * np.log10(arr[arr > 0] + EPS)
-        #     print(f"dB values - min: {np.min(db_test):.2f}, max: {np.max(db_test):.2f}, mean: {np.mean(db_test):.2f}")
-        #     print(f"Preprocessed - min: {np.min(proc)}, max: {np.max(proc)}, mean: {np.mean(proc):.2f}, std: {np.std(proc):.2f}")
-        #     print(f"Expected training stats - mean: 144.03, std: 63.21")
-        #     print(f"Preprocessed shape: {proc.shape}")
-        #     print(f"=================================\n")
-            
-            # Save sample for visual comparison
-            # sample_path = os.path.join(args.results_dir, f"sample_chip_inference_{tile_idx}.jpg")
-            # Image.fromarray(proc[:,:,0]).save(sample_path)
-            # print(f"Saved sample chip to {sample_path}")
-        
-        batch_images.append(proc)
-        
-        # store bbox as pixel coordinates
+        # Calculate bbox BEFORE preprocessing to save computation
         bbox_pixel = [
             int(win.col_off), 
             int(win.row_off), 
@@ -286,14 +292,21 @@ def main():
             int(win.row_off + win.height)
         ]
         
-        # Calculate geographic coordinates from scene bbox
         bbox_geo = calculate_chip_bbox_geo(
             scene_bbox, 
             bbox_pixel, 
             raster_width, 
             raster_height
         )
-        
+
+        # Skip if on land (before expensive preprocessing)
+        if bbox_on_land(bbox_geo):
+            tile_idx += 1
+            continue
+
+        # Now do the expensive preprocessing
+        proc = preprocess_chip(arr)  # shape (H,W,3)
+        batch_images.append(proc)
         batch_tileinfo.append((tile_idx, bbox_pixel, bbox_geo))
         tile_idx += 1
 
