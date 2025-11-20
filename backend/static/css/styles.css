@@ -165,7 +165,7 @@ html:not(.light) .logo {
 /* Layout containers */
 .container.narrow {
     max-width: 980px;
-    margin: 32px auto;
+    margin: 16px auto;
     padding: 0 20px;
 }
 
@@ -263,8 +263,17 @@ select, input[type="range"], input[type="text"], input[type="number"] {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 10px;
+    padding: 20px 24px;
+    margin: 16px 0;
     transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.description p {
+    color: var(--text);
+    margin: 0;
+    line-height: 1.7;
+    font-size: 1.05rem;
+    font-weight: 500;
 }
 
 

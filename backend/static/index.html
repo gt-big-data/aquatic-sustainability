@@ -46,8 +46,8 @@
   .hero {
     background: rgba(255, 255, 255, 0.9);
     border-radius: 16px;
-    padding: 48px 32px;
-    margin-bottom: 32px;
+    padding: 32px 28px;
+    margin-bottom: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
   }
@@ -68,6 +68,25 @@
   html:not(.light) .cards {
     background: rgba(26, 26, 26, 0.9);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .description {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--border);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  html:not(.light) .description {
+    background: rgba(26, 26, 26, 0.9);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .hero h1 {
+    margin: 0 0 12px 0;
+  }
+
+  .hero .lead {
+    margin-bottom: 16px;
   }
 </style>
 </head>
@@ -108,7 +127,7 @@ Analyzing watershed anomalies and water affordability patterns to protect at‑r
 </section>
 
 <section class="description">
-  <h3><strong>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</strong></h3>
+  <p>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</p>
 </section>
 
 <section class="cards">
