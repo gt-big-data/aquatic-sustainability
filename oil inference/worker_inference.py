@@ -112,31 +112,68 @@ def read_chip(src, window, out_shape):
     return arr
 
 def preprocess_chip(arr):
+    # """
+    # Preprocess DN values to match training JPEG distribution.
+    # Target: mean≈144, std≈63 on [0, 255] scale
+    # """
+    # arr = arr.astype(np.float32)
+    
+    # # Handle invalid values
+    # arr[arr <= 0.0] = np.nanmedian(arr) if np.any(arr > 0) else 100.0
+    # arr[np.isnan(arr)] = np.nanmedian(arr)
+    
+    # # Your data stats: mean=99.58, range=[0, 347]
+    # # To match training mean=144, we need to scale up
+    
+    # # Clip to reasonable DN range for ocean
+    # arr_clipped = np.clip(arr, 0, 250)  # Avoid extreme outliers
+    
+    # # Scale to approximate training distribution
+    # # Linear mapping: [0, 250] → [0, 255] with shift to match mean
+    # norm = (arr_clipped / 250.0 * 255.0).astype(np.uint8)
+    
+    # # Apply histogram adjustment to match training mean
+    # current_mean = np.mean(norm)
+    # target_mean = 144.0
+    # adjustment = target_mean - current_mean
+    # norm = np.clip(norm.astype(np.float32) + adjustment, 0, 255).astype(np.uint8)
+    
+    # # Convert to 3-channel RGB
+    # norm = np.stack([norm, norm, norm], axis=-1)
+    
+    # return norm
     """
-    Preprocess DN values to match training JPEG distribution.
-    Target: mean≈144, std≈63 on [0, 255] scale
+    Preprocess Sentinel-1 GRD DN values to match training data.
+    Assumes DN values need calibration to sigma0.
     """
     arr = arr.astype(np.float32)
     
     # Handle invalid values
-    arr[arr <= 0.0] = np.nanmedian(arr) if np.any(arr > 0) else 100.0
-    arr[np.isnan(arr)] = np.nanmedian(arr)
+    arr[arr <= 0.0] = EPS
+    arr[np.isnan(arr)] = EPS
     
-    # Your data stats: mean=99.58, range=[0, 347]
-    # To match training mean=144, we need to scale up
+    # Calibration: DN to sigma0 (linear power)
+    # For Sentinel-1 GRD, typical formula is: sigma0 = (DN^2) / calibration_constant
+    # Or simpler approximation: sigma0 = DN^2 / 10000.0
+    # This converts DN [0-350] to sigma0 [0-12] which is still too high
     
-    # Clip to reasonable DN range for ocean
-    arr_clipped = np.clip(arr, 0, 250)  # Avoid extreme outliers
+    # Better approach: Use empirical normalization based on your data
+    # Your DN range: [0, 347], mean: 99.58
+    # Target sigma0 range for ocean: [0.001, 0.1] (linear)
     
-    # Scale to approximate training distribution
-    # Linear mapping: [0, 250] → [0, 255] with shift to match mean
-    norm = (arr_clipped / 250.0 * 255.0).astype(np.uint8)
+    # Empirical calibration (tune these values):
+    sigma0_linear = (arr / 100.0) ** 2 / 100.0
+    # This maps DN=100 → sigma0≈0.01 which is reasonable for ocean
     
-    # Apply histogram adjustment to match training mean
-    current_mean = np.mean(norm)
-    target_mean = 144.0
-    adjustment = target_mean - current_mean
-    norm = np.clip(norm.astype(np.float32) + adjustment, 0, 255).astype(np.uint8)
+    # Convert to dB
+    db = 10.0 * np.log10(sigma0_linear + EPS)
+    
+    # Clip to typical ocean SAR range
+    db = np.clip(db, -30.0, 5.0)
+    
+    # Normalize to 0-255
+    db_min, db_max = -30.0, 5.0
+    norm = ((db - db_min) / (db_max - db_min) * 255.0).astype(np.uint8)
     
     # Convert to 3-channel RGB
     norm = np.stack([norm, norm, norm], axis=-1)

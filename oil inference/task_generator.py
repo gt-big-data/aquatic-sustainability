@@ -67,7 +67,7 @@ def main():
             collections=["sentinel-1-grd"],
             intersects=mapping(ocean),
             datetime=date_range_str,
-            max_items=1000,
+            max_items=5000,
         )
         
         # Check how many items were found by the API for this query

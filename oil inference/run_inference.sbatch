@@ -56,7 +56,7 @@ python worker_inference.py \
     --chip-px 400 \
     --stride 200 \
     --batch-size 16 \
-    --threshold 0.1
+    --threshold 0.9
 
 echo "=========================================="
 echo "Completed: $(date)"
