@@ -1,3 +1,6 @@
+# Not completed yet, for future use next semester
+# Do NOT use yet 
+
 import os 
 import certifi
 
