@@ -15,23 +15,24 @@ document.addEventListener('DOMContentLoaded', () => {
 		});
 	}
 
-	// Logout button logic (optional auth)
-	const logoutBtn = document.getElementById('logoutBtn');
+	// Logout + auth UI logic (optional auth)
 	const loginLink = document.getElementById('loginLink');
+	const logoutBtn = document.getElementById('logoutBtn');
 	const token = localStorage.getItem('access_token');
 
+	// When clicking Logout: clear token, then go to /login
 	if (logoutBtn) {
-		logoutBtn.addEventListener('click', () => {
+		logoutBtn.addEventListener('click', (e) => {
+			e.preventDefault(); // prevent default link behavior
 			localStorage.removeItem('access_token');
-			// After logout, send them to login
 			window.location.href = '/login';
 		});
 	}
 
-	// Toggle auth UI but do NOT force redirect if no token
+	// Show only Logout when logged in; only Login when logged out
 	if (token) {
 		if (logoutBtn) logoutBtn.style.display = 'inline-flex';
-		if (loginLink) loginLink.style.display = 'inline-flex'; // will hide below for login/register
+		if (loginLink) loginLink.style.display = 'none';
 	} else {
 		if (logoutBtn) logoutBtn.style.display = 'none';
 		if (loginLink) loginLink.style.display = 'inline-flex';
