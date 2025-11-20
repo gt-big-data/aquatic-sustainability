@@ -27,6 +27,8 @@ import rasterio
 from rasterio.windows import Window
 from rasterio.errors import RasterioIOError
 from urllib.parse import urlparse
+import planetary_computer
+from PIL import Image
 
 # PARAMETERS
 EPS = 1e-6
@@ -35,7 +37,7 @@ DB_MAX = 0.0    # dB clip upper bound
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--scene-csv", required=True, help="CSV with scene rows (scene_id,scene_href,datetime)")
+    p.add_argument("--scene-csv", required=True, help="CSV with scene rows (scene_id,scene_href,datetime,bbox_*)")
     p.add_argument("--row-index", type=int, required=True, help="0-based index into scene CSV")
     p.add_argument("--saved-model", required=True, help="Path to TF SavedModel directory")
     p.add_argument("--results-dir", required=True, help="Directory to write JSON results")
@@ -43,6 +45,7 @@ def parse_args():
     p.add_argument("--stride", type=int, default=200, help="chip stride in pixels (default 200)")
     p.add_argument("--batch-size", type=int, default=16, help="how many chips to batch for model inference")
     p.add_argument("--max-tiles", type=int, default=None, help="for testing: max tiles to process from this scene")
+    p.add_argument("--threshold", type=float, default=0.7, help="minimum probability to save result (default 0.7)")
     return p.parse_args()
 
 def load_scene_row(csv_path, index):
@@ -56,11 +59,19 @@ def load_scene_row(csv_path, index):
 def open_raster(href, max_retries=3, backoff=2.0):
     """
     Open a COG URL via rasterio. Uses vsicurl if HTTP(s).
+    Re-signs URL if it's from Planetary Computer.
     """
     tries = 0
     last_err = None
     while tries < max_retries:
         try:
+            # Re-sign URL if it's from Planetary Computer
+            if "blob.core.windows.net" in href or "planetarycomputer" in href:
+                try:
+                    href = planetary_computer.sign(href)
+                except Exception as sign_err:
+                    print(f"Warning: Could not sign URL: {sign_err}")
+            
             if href.startswith("http://") or href.startswith("https://"):
                 # vsicurl prefix allows HTTP range reads via GDAL
                 rio_path = "/vsicurl/" + href
@@ -71,6 +82,8 @@ def open_raster(href, max_retries=3, backoff=2.0):
         except RasterioIOError as e:
             last_err = e
             tries += 1
+            if "403" in str(e):
+                print(f"403 error, attempt {tries}/{max_retries}. Retrying with fresh signature...")
             time.sleep(backoff ** tries)
     raise last_err
 
@@ -99,22 +112,34 @@ def read_chip(src, window, out_shape):
 
 def preprocess_chip(arr):
     """
-    Preprocess to match training-style chips:
-      - ensure float32
-      - replace non-positive / nodata with small eps
-      - convert intensity -> dB: 10 * log10(arr)
-      - clip to DB_MIN/DB_MAX
-      - min-max normalize to [0,1]
-      - return shape (H, W, 1), dtype float32
+    Preprocess DN values to match training JPEG distribution.
+    Target: mean≈144, std≈63 on [0, 255] scale
     """
     arr = arr.astype(np.float32)
-    arr[arr <= 0.0] = EPS
-    db = 10.0 * np.log10(arr + EPS)
-    db = np.clip(db, DB_MIN, DB_MAX)
-    # Scale to 0-255 to match training
-    norm = ((db - DB_MIN) / (DB_MAX - DB_MIN) * 255.0).astype(np.uint8)
-    # Repeat to 3 channels for RGB compatibility
-    norm = np.stack([norm, norm, norm], axis=-1)  # Shape: (H, W, 3)
+    
+    # Handle invalid values
+    arr[arr <= 0.0] = np.nanmedian(arr) if np.any(arr > 0) else 100.0
+    arr[np.isnan(arr)] = np.nanmedian(arr)
+    
+    # Your data stats: mean=99.58, range=[0, 347]
+    # To match training mean=144, we need to scale up
+    
+    # Clip to reasonable DN range for ocean
+    arr_clipped = np.clip(arr, 0, 250)  # Avoid extreme outliers
+    
+    # Scale to approximate training distribution
+    # Linear mapping: [0, 250] → [0, 255] with shift to match mean
+    norm = (arr_clipped / 250.0 * 255.0).astype(np.uint8)
+    
+    # Apply histogram adjustment to match training mean
+    current_mean = np.mean(norm)
+    target_mean = 144.0
+    adjustment = target_mean - current_mean
+    norm = np.clip(norm.astype(np.float32) + adjustment, 0, 255).astype(np.uint8)
+    
+    # Convert to 3-channel RGB
+    norm = np.stack([norm, norm, norm], axis=-1)
+    
     return norm
 
 def batch_predict(model, batch_array):
@@ -130,14 +155,15 @@ def batch_predict(model, batch_array):
     # Return probability of class 1 (oil)
     return probs[:, 1]
 
-def save_result_json(results_dir, scene_id, tile_index, bbox_geo, datetime_acq, score):
+def save_result_json(results_dir, scene_id, tile_index, bbox_pixel, bbox_geo, datetime_acq, score):
     os.makedirs(results_dir, exist_ok=True)
     fname = f"{scene_id}_tile_{tile_index:08d}.json"
     path = os.path.join(results_dir, fname)
     rec = {
         "scene_id": scene_id,
         "tile_index": tile_index,
-        "bbox": bbox_geo,  # keep scene pixel coords or optionally convert to lon/lat
+        "bbox_pixel": bbox_pixel,  # [col_min, row_min, col_max, row_max]
+        "bbox_geo": bbox_geo,      # [lon_min, lat_min, lon_max, lat_max]
         "datetime": datetime_acq,
         "score": float(score),
         "created_utc": datetime.utcnow().isoformat() + "Z"
@@ -146,14 +172,52 @@ def save_result_json(results_dir, scene_id, tile_index, bbox_geo, datetime_acq, 
         json.dump(rec, f)
     return path
 
+def calculate_chip_bbox_geo(scene_bbox, chip_bbox_pixel, raster_width, raster_height):
+    """
+    Calculate geographic bbox for a chip based on scene bbox and pixel position.
+    
+    Args:
+        scene_bbox: [lon_min, lat_min, lon_max, lat_max] of full scene
+        chip_bbox_pixel: [col_min, row_min, col_max, row_max] in pixels
+        raster_width: total width of raster in pixels
+        raster_height: total height of raster in pixels
+    
+    Returns:
+        [lon_min, lat_min, lon_max, lat_max] for the chip
+    """
+    scene_lon_min, scene_lat_min, scene_lon_max, scene_lat_max = scene_bbox
+    col_min, row_min, col_max, row_max = chip_bbox_pixel
+    
+    # Calculate pixel size in degrees
+    lon_per_pixel = (scene_lon_max - scene_lon_min) / raster_width
+    lat_per_pixel = (scene_lat_max - scene_lat_min) / raster_height
+    
+    # Calculate chip geographic bbox
+    chip_lon_min = scene_lon_min + (col_min * lon_per_pixel)
+    chip_lon_max = scene_lon_min + (col_max * lon_per_pixel)
+    chip_lat_max = scene_lat_max - (row_min * lat_per_pixel)  # Note: rows go down
+    chip_lat_min = scene_lat_max - (row_max * lat_per_pixel)
+    
+    return [chip_lon_min, chip_lat_min, chip_lon_max, chip_lat_max]
+
 def main():
     args = parse_args()
     row = load_scene_row(args.scene_csv, args.row_index)
     scene_id = row["scene_id"]
     href = row["scene_href"]
     datetime_acq = row.get("datetime", "")
+    
+    # Load scene bounding box from CSV
+    scene_bbox = [
+        float(row["bbox_lon_min"]),
+        float(row["bbox_lat_min"]),
+        float(row["bbox_lon_max"]),
+        float(row["bbox_lat_max"])
+    ]
 
     print(f"[{scene_id}] Opening scene: {href}")
+    print(f"Scene bbox: {scene_bbox}")
+    print(f"Using threshold: {args.threshold}")
     src = open_raster(href)
 
     # load TF model once
@@ -164,14 +228,18 @@ def main():
     chip_px = args.chip_px
     stride = args.stride
     batch_size = args.batch_size
+    
+    raster_width = src.width
+    raster_height = src.height
 
     windows = list(iter_windows(src, chip_px, stride))
     n_tiles = len(windows)
-    print(f"Scene dimensions: {src.width}x{src.height}. Will process {n_tiles} tiles (chip {chip_px}, stride {stride}).")
+    print(f"Scene dimensions: {raster_width}x{raster_height}. Will process {n_tiles} tiles (chip {chip_px}, stride {stride}).")
 
     tile_idx = 0
     batch_images = []
     batch_tileinfo = []
+    saved_count = 0  # Track how many were saved
 
     # iterate windows
     for win in windows:
@@ -187,24 +255,69 @@ def main():
 
         # optional quick skip: if arr is all nodata or very low variance, skip
         if np.all(arr == 0) or np.nanstd(arr) < 1e-6:
-            # write a small result with score 0 or skip entirely; we'll skip to save compute
             tile_idx += 1
             continue
 
-        proc = preprocess_chip(arr)  # shape (H,W,1)
+        proc = preprocess_chip(arr)  # shape (H,W,3)
+        
+        # After first chip preprocessing
+        # if tile_idx % 1000 == 0:
+        #     print(f"\n=== PREPROCESSING DIAGNOSTICS ===")
+        #     print(f"Raw SAR - min: {np.min(arr):.6f}, max: {np.max(arr):.6f}, mean: {np.mean(arr):.6f}")
+        #     db_test = 10.0 * np.log10(arr[arr > 0] + EPS)
+        #     print(f"dB values - min: {np.min(db_test):.2f}, max: {np.max(db_test):.2f}, mean: {np.mean(db_test):.2f}")
+        #     print(f"Preprocessed - min: {np.min(proc)}, max: {np.max(proc)}, mean: {np.mean(proc):.2f}, std: {np.std(proc):.2f}")
+        #     print(f"Expected training stats - mean: 144.03, std: 63.21")
+        #     print(f"Preprocessed shape: {proc.shape}")
+        #     print(f"=================================\n")
+            
+            # Save sample for visual comparison
+            # sample_path = os.path.join(args.results_dir, f"sample_chip_inference_{tile_idx}.jpg")
+            # Image.fromarray(proc[:,:,0]).save(sample_path)
+            # print(f"Saved sample chip to {sample_path}")
+        
         batch_images.append(proc)
-        # store bbox as pixel coordinates (col_off, row_off, width, height)
-        bbox_geo = [int(win.col_off), int(win.row_off), int(win.col_off + win.width), int(win.row_off + win.height)]
-        batch_tileinfo.append((tile_idx, bbox_geo))
+        
+        # store bbox as pixel coordinates
+        bbox_pixel = [
+            int(win.col_off), 
+            int(win.row_off), 
+            int(win.col_off + win.width), 
+            int(win.row_off + win.height)
+        ]
+        
+        # Calculate geographic coordinates from scene bbox
+        bbox_geo = calculate_chip_bbox_geo(
+            scene_bbox, 
+            bbox_pixel, 
+            raster_width, 
+            raster_height
+        )
+        
+        batch_tileinfo.append((tile_idx, bbox_pixel, bbox_geo))
         tile_idx += 1
 
         # if batch full, run inference
         if len(batch_images) >= batch_size:
-            batch = np.stack(batch_images, axis=0)  # (N,H,W,1)
+            batch = np.stack(batch_images, axis=0)  # (N,H,W,3)
             preds = batch_predict(model, batch)
             for i, p in enumerate(preds):
-                tidx, bbox = batch_tileinfo[i]
-                outpath = save_result_json(args.results_dir, scene_id, tidx, bbox, datetime_acq, float(p))
+                tidx, bbox_pix, bbox_g = batch_tileinfo[i]
+                # Only save if above threshold
+                if p >= args.threshold:
+                    outpath = save_result_json(
+                        args.results_dir, 
+                        scene_id, 
+                        tidx, 
+                        bbox_pix, 
+                        bbox_g, 
+                        datetime_acq, 
+                        float(p)
+                    )
+                    sample_path = os.path.join(args.results_dir, f"sample_chip_inference_{tidx}.jpg")
+                    Image.fromarray(proc[:,:,0]).save(sample_path)
+                    print(f"Saved sample chip to {sample_path}")
+                    saved_count += 1
             batch_images = []
             batch_tileinfo = []
 
@@ -213,10 +326,24 @@ def main():
         batch = np.stack(batch_images, axis=0)
         preds = batch_predict(model, batch)
         for i, p in enumerate(preds):
-            tidx, bbox = batch_tileinfo[i]
-            outpath = save_result_json(args.results_dir, scene_id, tidx, bbox, datetime_acq, float(p))
+            tidx, bbox_pix, bbox_g = batch_tileinfo[i]
+            # Only save if above threshold
+            if p >= args.threshold:
+                outpath = save_result_json(
+                    args.results_dir, 
+                    scene_id, 
+                    tidx, 
+                    bbox_pix, 
+                    bbox_g, 
+                    datetime_acq, 
+                    float(p)
+                )
+                sample_path = os.path.join(args.results_dir, f"sample_chip_inference_{tidx}.jpg")
+                Image.fromarray(proc[:,:,0]).save(sample_path)
+                print(f"Saved sample chip to {sample_path}")
+                saved_count += 1
 
-    print(f"Scene {scene_id} done. Processed {tile_idx} tiles.")
+    print(f"Scene {scene_id} done. Processed {tile_idx} tiles, saved {saved_count} detections above threshold {args.threshold}.")
     src.close()
 
 if __name__ == "__main__":

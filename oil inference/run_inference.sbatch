@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -J s1_oil_inference
-#SBATCH --account=gts-wgao305
+#SBATCH --account=paceship-aquatic
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=8G
 #SBATCH -t 4:00:00
-#SBATCH -q embers
+#SBATCH -p cpu-medium
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=wgao305@gatech.edu
 #SBATCH --array=0-99%50
@@ -16,14 +16,16 @@
 set -e
 
 # Base project directory
-PROJECT_DIR="/storage/project/ps-aquatic-0/wgao305"
+PROJECT_DIR="/storage/project/ps-aquatic-0/wgao305/oil inference"
 
 # Create logs directory
 mkdir -p "${PROJECT_DIR}/logs"
 
-# Load required modules
+# Load anaconda3 module
 module load anaconda3
-module load gdal
+
+# Initialize conda for bash (required for 'conda activate')
+eval "$(conda shell.bash hook)"
 
 # Activate conda environment
 conda activate oilspill
@@ -53,7 +55,8 @@ python worker_inference.py \
     --results-dir "$RESULTS_DIR" \
     --chip-px 400 \
     --stride 200 \
-    --batch-size 16
+    --batch-size 16 \
+    --threshold 0.1
 
 echo "=========================================="
 echo "Completed: $(date)"

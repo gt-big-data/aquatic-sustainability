@@ -2,7 +2,7 @@
 """
 task_generator.py
 Query MS Planetary Computer STAC for Sentinel-1 GRD (VV) scenes intersecting the oceans,
-and write a CSV with one scene per row.
+and write a CSV with one scene per row including geographic bounding box.
 
 Outputs: scene_tasks.csv, scene_coverage_map.png
 """
@@ -20,8 +20,8 @@ from matplotlib.patches import Polygon as mplPolygon
 
 # PARAMETERS - adjust as needed
 STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
-START_DATE = "2025-10-01"
-END_DATE = "2025-11-01"  # Let's try a smaller range first, e.g., 2 months
+START_DATE = "2025-09-01"
+END_DATE = "2025-11-01"
 OUT_CSV = "scene_tasks.csv"
 OUT_MAP = "scene_coverage_map.png"
 MAX_ITEMS_PER_MONTH = None  # set to int to limit for testing
@@ -46,10 +46,10 @@ def main():
     stac = Client.open(STAC_URL)
     bbox = ocean.bounds  # (minx, miny, maxx, maxy)
 
-    # Write header to the CSV file first
+    # Write header to the CSV file first with bbox columns
     with open(OUT_CSV, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["scene_id", "scene_href", "datetime"])
+        writer.writerow(["scene_id", "scene_href", "datetime", "bbox_lon_min", "bbox_lat_min", "bbox_lon_max", "bbox_lat_max"])
 
     total_scenes = 0
     all_scene_geometries = []  # Collect all scene geometries for visualization
@@ -67,7 +67,7 @@ def main():
             collections=["sentinel-1-grd"],
             intersects=mapping(ocean),
             datetime=date_range_str,
-            max_items=5000,
+            max_items=1000,
         )
         
         # Check how many items were found by the API for this query
@@ -108,7 +108,19 @@ def main():
                 signed = href
 
             dt = item.properties.get("datetime", "")
-            rows.append((item.id, signed, dt))
+            
+            # Get geographic bounding box from STAC metadata
+            scene_bbox = item.bbox  # [lon_min, lat_min, lon_max, lat_max]
+            
+            rows.append((
+                item.id, 
+                href,  # Use unsigned URL
+                dt,
+                scene_bbox[0],  # lon_min
+                scene_bbox[1],  # lat_min
+                scene_bbox[2],  # lon_max
+                scene_bbox[3]   # lat_max
+            ))
             
             # Collect geometry for visualization
             if item.geometry:
@@ -160,9 +172,6 @@ def main():
         plt.tight_layout()
         plt.savefig(OUT_MAP, dpi=150, bbox_inches='tight')
         print(f"Coverage map saved as '{OUT_MAP}'")
-        
-        # Optionally display the plot
-        # plt.show()
     else:
         print("\nNo scenes found, skipping map generation.")
 
