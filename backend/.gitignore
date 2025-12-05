@@ -19,7 +19,7 @@ dump.rdb
 data/
 *.npy
 *.h5
-*.pt
+# *.pt - commented out to allow model files to be committed
 
 # Flask session / logs
 instance/
