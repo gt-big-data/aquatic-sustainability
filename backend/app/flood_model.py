@@ -32,8 +32,8 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 GPM_DIR = os.path.join(BASE_DIR, "gpm_temp")
 DATA_CACHE_DIR = os.path.join(BASE_DIR, "data_cache")
 
-MODEL_PATH = os.path.join(BASE_DIR, "DualCNNLSTM_best_model_V3.pt")
-SCALER_PATH = os.path.join(BASE_DIR, "DualCNNLSTM_scaler_V3.pkl")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "DualCNNLSTM_best_model_V3.pt")
+SCALER_PATH = os.path.join(os.path.dirname(__file__), "DualCNNLSTM_scaler_V3.pkl")
 
 os.makedirs(GPM_DIR, exist_ok=True)
 os.makedirs(DATA_CACHE_DIR, exist_ok=True)
