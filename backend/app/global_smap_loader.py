@@ -23,6 +23,30 @@ TARGET_LONS = np.linspace(-180, 180, 1440)    # ascending
 # AUTO-DOWNLOAD SMAP USING earthaccess
 # ================================================================
 
+def ensure_earthdata_auth():
+    """Create .netrc on Cloud Run using env vars."""
+    username = os.environ.get("EARTHDATA_USERNAME")
+    password = os.environ.get("EARTHDATA_PASSWORD")
+
+    if not username or not password:
+        raise RuntimeError("Missing Earthdata EARTHDATA_USERNAME or EARTHDATA_PASSWORD")
+
+    # Cloud Run allows writing inside /root or /tmp
+    NETRC_PATH = "/root/.netrc"
+
+    content = (
+        "machine urs.earthdata.nasa.gov\n"
+        f"    login {username}\n"
+        f"    password {password}\n"
+    )
+
+    with open(NETRC_PATH, "w") as f:
+        f.write(content)
+
+    os.chmod(NETRC_PATH, 0o600)
+
+    print("[AUTH] .netrc file created successfully")
+
 def download_last_21_smap(out_dir="./data/smap_download/", day_delay=5):
     """
     Downloads the last 21 daily SMAP SPL4SMAU files from NASA.
@@ -33,6 +57,8 @@ def download_last_21_smap(out_dir="./data/smap_download/", day_delay=5):
     - Returns sorted list of downloaded file paths
     """
     os.makedirs(out_dir, exist_ok=True)
+
+    ensure_earthdata_auth()
 
     print("[AUTH] Logging in to Earthdata…")
     # Use environment variables for authentication (required for non-interactive environments like Cloud Run)
