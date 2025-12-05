@@ -35,7 +35,8 @@ def download_last_21_smap(out_dir="./data/smap_download/", day_delay=5):
     os.makedirs(out_dir, exist_ok=True)
 
     print("[AUTH] Logging in to Earthdata…")
-    earthaccess.login()
+    # Use environment variables for authentication (required for non-interactive environments like Cloud Run)
+    earthaccess.login(persist=False)
 
     today = datetime.utcnow().date()
 

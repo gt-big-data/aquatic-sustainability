@@ -29,7 +29,8 @@ def download_last_4days_gpm(out_dir="./data/gpm_download/"):
     os.makedirs(out_dir, exist_ok=True)
 
     print("[AUTH] Logging in to Earthdata…")
-    earthaccess.login()
+    # Use environment variables for authentication (required for non-interactive environments like Cloud Run)
+    earthaccess.login(persist=False)
 
     today = datetime.utcnow().date()
 
