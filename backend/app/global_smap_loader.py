@@ -38,6 +38,9 @@ def ensure_earthdata_auth():
         "machine urs.earthdata.nasa.gov\n"
         f"    login {username}\n"
         f"    password {password}\n"
+        "machine data.gesdisc.earthdata.nasa.gov\n"
+        f"    login {username}\n"
+        f"    password {password}\n"
     )
 
     with open(NETRC_PATH, "w") as f:
@@ -62,7 +65,7 @@ def download_last_21_smap(out_dir="./data/smap_download/", day_delay=5):
 
     print("[AUTH] Logging in to Earthdata…")
     # Use environment variables for authentication (required for non-interactive environments like Cloud Run)
-    earthaccess.login(persist=False)
+    earthaccess.login(strategy="netrc", persist=False)
 
     today = datetime.utcnow().date()
 

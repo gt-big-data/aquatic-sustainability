@@ -52,7 +52,8 @@ steps:
       - '10'
       - '--timeout'
       - '300'
-      - '--startup-cpu-boost'
+      # Optional: Uncomment if CPU boost is available in your region
+      # - '--cpu-boost'
     id: 'deploy-cloud-run'
     waitFor: ['push-image-sha']
 

@@ -65,15 +65,18 @@ gcloud builds submit --substitutions=_REGION=us-central1,_REPOSITORY=aquatic-sus
 
 ## Environment Variables
 
-The application requires the following environment variables. Set them in Cloud Run:
+The application requires the following environment variables:
+- `SECRET_KEY` - Flask secret key
+- `GOOGLE_MAPS_API_KEY` - Google Maps API key
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_ANON_KEY` - Your Supabase anonymous key
+- `MONGODB_URI` - MongoDB connection string (optional)
 
-```bash
-gcloud run services update aquatic-sustainability \
-    --region=us-central1 \
-    --set-env-vars="SECRET_KEY=your-secret-key,GOOGLE_MAPS_API_KEY=your-api-key,SUPABASE_URL=your-supabase-url,SUPABASE_ANON_KEY=your-supabase-key,MONGODB_URI=your-mongodb-uri"
-```
-
-Or set them during deployment by modifying the `cloudbuild.yaml` deploy step to include `--set-env-vars`.
+**See [ENV_SETUP.md](ENV_SETUP.md) for detailed instructions on setting environment variables via:**
+- Google Cloud Console (Web UI) - **Easiest method**
+- gcloud CLI
+- Cloud Build substitution variables
+- Secret Manager (for sensitive data)
 
 ## Customization
 
