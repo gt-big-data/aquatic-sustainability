@@ -21,6 +21,10 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Add .netrc with Earthdata credentials
+COPY .netrc /root/.netrc
+RUN chmod 600 /root/.netrc
+
 # Copy application code
 COPY backend/ .
 
