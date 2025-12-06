@@ -583,11 +583,14 @@
 
     async function requestFloodRisk(centerLat, centerLon) {
       try {
-        const resp = await fetch('/api/flood-risk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: centerLat, lon: centerLon }),
-        });
+        const resp = await fetch(
+          'https://aquatic-sustainability-834508815183.us-east1.run.app/api/flood-risk',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: centerLat, lon: centerLon }),
+          }
+        );
 
         const data = await resp.json();
 
