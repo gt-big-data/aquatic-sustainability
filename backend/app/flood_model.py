@@ -288,6 +288,11 @@ def search_and_download_gpm_global(gpm_date: date, out_dir: str):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
 
+    # Ensure authentication before downloading
+    from app.global_gpm_loader import ensure_earthdata_auth
+    ensure_earthdata_auth()
+    earthaccess.login(strategy="netrc", persist=False)
+
     start = gpm_date.strftime("%Y-%m-%dT00:00:00")
     end = gpm_date.strftime("%Y-%m-%dT23:59:59")
 
