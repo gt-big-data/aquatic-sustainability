@@ -1,5 +1,5 @@
-#!/bin/bash
 # entrypoint.sh
+#!/bin/bash
 echo "machine urs.earthdata.nasa.gov" > ~/.netrc
 echo "login $EARTHDATA_USERNAME" >> ~/.netrc
 echo "password $EARTHDATA_PASSWORD" >> ~/.netrc

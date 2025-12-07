@@ -27,6 +27,8 @@ def ensure_earthdata_auth():
     """Create .netrc on Cloud Run using env vars."""
     username = os.environ.get("EARTHDATA_USERNAME")
     password = os.environ.get("EARTHDATA_PASSWORD")
+    if not username or not password:
+        raise RuntimeError("Missing Earthdata credentials")
 
     if not username or not password:
         raise RuntimeError("Missing Earthdata EARTHDATA_USERNAME or EARTHDATA_PASSWORD")
