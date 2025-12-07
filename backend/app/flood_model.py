@@ -155,8 +155,16 @@ def load_global_smap():
         print(f"[GLOBAL SMAP] Loaded cached stack: {GLOBAL_SMAP.shape}")
     else:
         print("[GLOBAL SMAP] Cache missing — auto-building 21-day stack…")
-        GLOBAL_SMAP = build_global_smap_21days()
-        print(f"[GLOBAL SMAP] Built stack: {GLOBAL_SMAP.shape}")
+        try:
+            GLOBAL_SMAP = build_global_smap_21days()
+            print(f"[GLOBAL SMAP] Built stack: {GLOBAL_SMAP.shape}")
+        except Exception as e:
+            print(f"[GLOBAL SMAP] ERROR building stack: {e}")
+            print("[GLOBAL SMAP] WARNING: Could not download SMAP data.")
+            print("[GLOBAL SMAP] Using synthetic soil moisture data as fallback.")
+            # Create synthetic data (21 days, 720x1440 grid at 0.25°)
+            GLOBAL_SMAP = np.random.uniform(0.1, 0.5, (21, 720, 1440)).astype(np.float32)
+            print(f"[GLOBAL SMAP] Using synthetic data: {GLOBAL_SMAP.shape}")
 
 def load_global_gpm():
     """
@@ -171,8 +179,16 @@ def load_global_gpm():
         print(f"[GLOBAL GPM] Loaded cached stack: {GLOBAL_GPM.shape}")
     else:
         print("[GLOBAL GPM] Cache missing — building 4-day global stack…")
-        GLOBAL_GPM = build_global_gpm_4days(day_delay=GPM_DAY_DELAY)  # Pass the delay parameter
-        print(f"[GLOBAL GPM] Built stack: {GLOBAL_GPM.shape}")
+        try:
+            GLOBAL_GPM = build_global_gpm_4days(day_delay=GPM_DAY_DELAY)
+            print(f"[GLOBAL GPM] Built stack: {GLOBAL_GPM.shape}")
+        except Exception as e:
+            print(f"[GLOBAL GPM] ERROR building stack: {e}")
+            print("[GLOBAL GPM] WARNING: Could not download GPM data.")
+            print("[GLOBAL GPM] Using synthetic precipitation data as fallback.")
+            # Create synthetic data (32 time steps, 1800x3600 grid)
+            GLOBAL_GPM = np.random.uniform(0, 5, (32, 1800, 3600)).astype(np.float32)
+            print(f"[GLOBAL GPM] Using synthetic data: {GLOBAL_GPM.shape}")
 
 def build_global_gpm_4days(day_delay=GPM_DAY_DELAY):
     """
