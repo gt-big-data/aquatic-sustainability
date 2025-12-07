@@ -1,3 +1,4 @@
+#!/bin/bash
 # entrypoint.sh
 echo "machine urs.earthdata.nasa.gov" > ~/.netrc
 echo "login $EARTHDATA_USER" >> ~/.netrc
