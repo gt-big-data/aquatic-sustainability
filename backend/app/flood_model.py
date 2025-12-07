@@ -301,29 +301,34 @@ def search_and_download_gpm_global(gpm_date: date, out_dir: str):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
 
-    # Ensure authentication before downloading
-    from app.global_gpm_loader import ensure_earthdata_auth
-    ensure_earthdata_auth()
-    print("[GPM] Logging in to Earthdata via netrc before download…")
-    earthaccess.login(strategy="netrc")
+    try:
+        # Ensure authentication before downloading
+        from app.global_gpm_loader import ensure_earthdata_auth
+        ensure_earthdata_auth()
+        print("[GPM] Logging in to Earthdata via netrc before download…")
+        earthaccess.login(strategy="netrc")
 
-    start = gpm_date.strftime("%Y-%m-%dT00:00:00")
-    end = gpm_date.strftime("%Y-%m-%dT23:59:59")
+        start = gpm_date.strftime("%Y-%m-%dT00:00:00")
+        end = gpm_date.strftime("%Y-%m-%dT23:59:59")
 
-    results = earthaccess.search_data(
-        short_name="GPM_3IMERGHHL",
-        version="07",
-        temporal=(start, end),
-    )
+        results = earthaccess.search_data(
+            short_name="GPM_3IMERGHHL",
+            version="07",
+            temporal=(start, end),
+        )
 
-    paths = earthaccess.download(results, local_path=out_dir)
+        paths = earthaccess.download(results, local_path=out_dir)
 
-    precip_files = [
-        str(fp) for fp in paths
-        if ("3B-HHR" in str(fp)) and str(fp).lower().endswith(".hdf5")
-    ]
+        precip_files = [
+            str(fp) for fp in paths
+            if ("3B-HHR" in str(fp)) and str(fp).lower().endswith(".hdf5")
+        ]
 
-    return sorted(precip_files)
+        return sorted(precip_files)
+    except Exception as e:
+        print(f"[GPM] Download failed for {gpm_date}: {e}")
+        print(f"[GPM] Returning empty list - will use synthetic data")
+        return []
 
 def read_gpm_precip_grid(filepath: str):
     """Read GPM precipitation grid as global DataArray."""
