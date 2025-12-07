@@ -24,25 +24,23 @@ TARGET_LONS = np.linspace(-180, 180, 1440)    # ascending
 # ================================================================
 
 def ensure_earthdata_auth():
-    """Create .netrc on Cloud Run using env vars."""
+    """Create .netrc on Cloud Run using env vars and authenticate directly."""
     username = os.environ.get("EARTHDATA_USERNAME")
     password = os.environ.get("EARTHDATA_PASSWORD")
     if not username or not password:
-        raise RuntimeError("Missing Earthdata credentials")
-
-    if not username or not password:
-        raise RuntimeError("Missing Earthdata EARTHDATA_USERNAME or EARTHDATA_PASSWORD")
+        raise RuntimeError("Missing Earthdata credentials: EARTHDATA_USERNAME and EARTHDATA_PASSWORD must be set")
 
     # Cloud Run allows writing inside /root or /tmp
     NETRC_PATH = "/root/.netrc"
 
+    # Standard .netrc format: NO indentation
     content = (
-        "machine urs.earthdata.nasa.gov\n"
-        f"    login {username}\n"
-        f"    password {password}\n"
-        "machine data.gesdisc.earthdata.nasa.gov\n"
-        f"    login {username}\n"
-        f"    password {password}\n"
+        f"machine urs.earthdata.nasa.gov\n"
+        f"login {username}\n"
+        f"password {password}\n"
+        f"machine data.gesdisc.earthdata.nasa.gov\n"
+        f"login {username}\n"
+        f"password {password}\n"
     )
 
     with open(NETRC_PATH, "w") as f:
@@ -51,6 +49,13 @@ def ensure_earthdata_auth():
     os.chmod(NETRC_PATH, 0o600)
 
     print("[AUTH] .netrc file created successfully")
+    
+    # Also attempt direct login with credentials
+    try:
+        earthaccess.login(username=username, password=password, persist=False)
+        print("[AUTH] Direct earthaccess login successful")
+    except Exception as e:
+        print(f"[AUTH] Direct earthaccess login failed: {e}")
 
 def download_last_21_smap(out_dir="./data/smap_download/", day_delay=5):
     """
@@ -65,9 +70,7 @@ def download_last_21_smap(out_dir="./data/smap_download/", day_delay=5):
 
     ensure_earthdata_auth()
 
-    print("[AUTH] Logging in to Earthdata…")
-    # Use environment variables for authentication (required for non-interactive environments like Cloud Run)
-    earthaccess.login(strategy="netrc", persist=False)
+    print("[AUTH] Logged in to Earthdata")
 
     today = datetime.utcnow().date()
 

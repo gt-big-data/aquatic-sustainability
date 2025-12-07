@@ -270,18 +270,10 @@ def earthdata_login():
     # Import here to avoid circular imports
     from app.global_gpm_loader import ensure_earthdata_auth
     
-    # Ensure .netrc file exists with credentials
+    # Ensure .netrc file exists with credentials and authenticate
     ensure_earthdata_auth()
     
-    print("[GPM] Attempting Earthdata login via netrc…")
-    auth = earthaccess.login(strategy="netrc")
-
-    if auth is None or not getattr(auth, "authenticated", False):
-        print("[GPM] Earthdata login failed or not authenticated.")
-        raise RuntimeError("Earthdata Login failed for GPM (netrc).")
-
     print("[GPM] Earthdata login OK.")
-    return auth
 
 def search_and_download_gpm_global(gpm_date: date, out_dir: str):
     """Download GPM without regional bounding box for global coverage."""
@@ -291,7 +283,6 @@ def search_and_download_gpm_global(gpm_date: date, out_dir: str):
     # Ensure authentication before downloading
     from app.global_gpm_loader import ensure_earthdata_auth
     ensure_earthdata_auth()
-    earthaccess.login(strategy="netrc", persist=False)
 
     start = gpm_date.strftime("%Y-%m-%dT00:00:00")
     end = gpm_date.strftime("%Y-%m-%dT23:59:59")
