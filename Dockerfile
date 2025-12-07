@@ -6,7 +6,6 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=run.py
-ENV PORT=5000
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -30,7 +29,7 @@ RUN chmod +x /entrypoint.sh
 # Create directory for static files if needed
 RUN mkdir -p static
 
-EXPOSE 5000
+EXPOSE 8080
 
 # Use entrypoint script to generate .netrc and start Gunicorn
 ENTRYPOINT ["/entrypoint.sh"]
