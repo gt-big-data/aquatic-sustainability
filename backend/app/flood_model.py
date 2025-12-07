@@ -274,8 +274,10 @@ def earthdata_login():
     ensure_earthdata_auth()
     
     # Login using netrc file
-    earthaccess.login(strategy="netrc")
-    
+    print("[GPM] Logging in to Earthdata via netrc…")
+    auth_result = earthaccess.login(strategy="netrc")
+    print(f"[GPM] Login result: {auth_result}")
+    print(f"[GPM] Authenticated: {getattr(auth_result, 'authenticated', 'unknown')}")
     print("[GPM] Earthdata login OK.")
 
 def search_and_download_gpm_global(gpm_date: date, out_dir: str):
@@ -286,6 +288,7 @@ def search_and_download_gpm_global(gpm_date: date, out_dir: str):
     # Ensure authentication before downloading
     from app.global_gpm_loader import ensure_earthdata_auth
     ensure_earthdata_auth()
+    print("[GPM] Logging in to Earthdata via netrc before download…")
     earthaccess.login(strategy="netrc")
 
     start = gpm_date.strftime("%Y-%m-%dT00:00:00")

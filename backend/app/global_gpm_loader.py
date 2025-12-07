@@ -25,6 +25,7 @@ def ensure_earthdata_auth():
     """Create .netrc on Cloud Run using env vars."""
     username = os.environ.get("EARTHDATA_USERNAME")
     password = os.environ.get("EARTHDATA_PASSWORD")
+    
     if not username or not password:
         raise RuntimeError("Missing Earthdata credentials: EARTHDATA_USERNAME and EARTHDATA_PASSWORD must be set")
 
@@ -46,7 +47,12 @@ def ensure_earthdata_auth():
 
     os.chmod(NETRC_PATH, 0o600)
 
-    print("[AUTH] .netrc file created successfully")
+    print(f"[AUTH] .netrc file created at {NETRC_PATH}")
+    print(f"[AUTH] Username: {username}")
+    
+    # Verify file was created
+    if os.path.exists(NETRC_PATH):
+        print(f"[AUTH] .netrc file exists and has correct permissions")
 
 def download_last_4days_gpm(out_dir="./data/gpm_download/"):
     """
@@ -58,9 +64,11 @@ def download_last_4days_gpm(out_dir="./data/gpm_download/"):
     # Ensure .netrc file is created with Earthdata credentials
     ensure_earthdata_auth()
 
-    print("[AUTH] Logged in to Earthdata")
+    print("[AUTH] Logging in to Earthdata via netrc…")
     # Login using netrc file
-    earthaccess.login(strategy="netrc")
+    auth_result = earthaccess.login(strategy="netrc")
+    print(f"[AUTH] Login result: {auth_result}")
+    print(f"[AUTH] Authenticated: {getattr(auth_result, 'authenticated', 'unknown')}")
 
     today = datetime.utcnow().date()
 
