@@ -21,12 +21,41 @@ TARGET_LONS = np.linspace(-180, 180, 3600)     # ascending
 # AUTO-DOWNLOAD GPM USING earthaccess
 # ================================================================
 
+def ensure_earthdata_auth():
+    """Create .netrc on Cloud Run using env vars."""
+    username = os.environ.get("EARTHDATA_USERNAME")
+    password = os.environ.get("EARTHDATA_PASSWORD")
+    if not username or not password:
+        raise RuntimeError("Missing Earthdata credentials: EARTHDATA_USERNAME and EARTHDATA_PASSWORD must be set")
+
+    # Cloud Run allows writing inside /root or /tmp
+    NETRC_PATH = "/root/.netrc"
+
+    content = (
+        "machine urs.earthdata.nasa.gov\n"
+        f"    login {username}\n"
+        f"    password {password}\n"
+        "machine data.gesdisc.earthdata.nasa.gov\n"
+        f"    login {username}\n"
+        f"    password {password}\n"
+    )
+
+    with open(NETRC_PATH, "w") as f:
+        f.write(content)
+
+    os.chmod(NETRC_PATH, 0o600)
+
+    print("[AUTH] .netrc file created successfully")
+
 def download_last_4days_gpm(out_dir="./data/gpm_download/"):
     """
     Downloads the last 4 days of GPM 3IMERGHHL files from NASA.
     Returns a sorted list of downloaded file paths.
     """
     os.makedirs(out_dir, exist_ok=True)
+
+    # Ensure .netrc file is created with Earthdata credentials
+    ensure_earthdata_auth()
 
     print("[AUTH] Logging in to Earthdata…")
     # Use environment variables for authentication (required for non-interactive environments like Cloud Run)

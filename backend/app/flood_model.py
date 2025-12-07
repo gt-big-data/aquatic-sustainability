@@ -267,6 +267,12 @@ def ensure_global_data_loaded():
 # =====================================================================
 
 def earthdata_login():
+    # Import here to avoid circular imports
+    from app.global_gpm_loader import ensure_earthdata_auth
+    
+    # Ensure .netrc file exists with credentials
+    ensure_earthdata_auth()
+    
     print("[GPM] Attempting Earthdata login via netrc…")
     auth = earthaccess.login(strategy="netrc")
 
