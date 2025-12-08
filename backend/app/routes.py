@@ -81,26 +81,19 @@ def mongoDB_uri():
 @bp.route('/register', methods=['POST'])
 @cross_origin(origins="https://aquatic-sustainability.vercel.app", methods=["POST", "OPTIONS"])
 def register():
-    print("[REGISTER] Registration attempt")
+    print("registering attempt now")
     if not supabase:
-        print("[REGISTER] ERROR: Supabase client not configured")
         return jsonify({"error": "Authentication service not configured"}), 503
 
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    
-    print(f"[REGISTER] Attempting signup for: {email}")
 
-    try:
-        # create user
-        raw = supabase.auth.sign_up({
-            "email": email,
-            "password": password
-        })
-    except Exception as e:
-        print(f"[REGISTER] Exception during signup: {e}")
-        return jsonify({"error": str(e)}), 500
+    # create user
+    raw = supabase.auth.sign_up({
+        "email": email,
+        "password": password
+    })
 
     # Normalize response: supabase client may return different shapes depending on version.
     error = None
@@ -115,41 +108,30 @@ def register():
     except Exception:
         error = None
 
-    print(f"[REGISTER] Response - Error: {error}, Data: {user_data}")
+    print({"raw": raw, "normalized_error": error, "normalized_data": user_data})
 
     if error:
         # error may be a dict or string
         if isinstance(error, dict) and error.get('message'):
-            print(f"[REGISTER] Error message: {error['message']}")
             return jsonify({"error": error['message']}), 400
-        print(f"[REGISTER] Error: {str(error)}")
         return jsonify({"error": str(error)}), 400
 
-    print("[REGISTER] SUCCESS")
     return jsonify({"message": "User registered successfully", "user": user_data}), 200
 
 
 @bp.route('/login', methods=['POST'])
 def login():
-    print("[LOGIN] Login attempt")
     if not supabase:
-        print("[LOGIN] ERROR: Supabase client not configured")
         return jsonify({"error": "Authentication service not configured"}), 503
 
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    
-    print(f"[LOGIN] Attempting login for: {email}")
 
-    try:
-        raw = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-    except Exception as e:
-        print(f"[LOGIN] Exception during login: {e}")
-        return jsonify({"error": str(e)}), 500
+    raw = supabase.auth.sign_in_with_password({
+        "email": email,
+        "password": password
+    })
 
     # Normalize response
     error = None
@@ -164,13 +146,9 @@ def login():
     except Exception:
         error = None
 
-    print(f"[LOGIN] Response - Error: {error}, Data: {data_obj}")
-
     if error:
         if isinstance(error, dict) and error.get('message'):
-            print(f"[LOGIN] Error message: {error['message']}")
             return jsonify({"error": error['message']}), 400
-        print(f"[LOGIN] Error: {str(error)}")
         return jsonify({"error": str(error)}), 400
 
     # Try to extract session from data_obj (object or dict)
