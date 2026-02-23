@@ -19,7 +19,7 @@ if Config.SUPABASE_URL and Config.SUPABASE_ANON_KEY:
 def create_app():
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config.from_object(Config)
-    CORS(app, resources={r"/api/*": {"origins": "https://aquatic-sustainability.vercel.app"}})
+    CORS(app, resources={r"/api/*": {"origins": "https://aquatic-sustainability-834508815183.us-east1.run.app/"}})
 
     # registering API routes
     from .routes import bp as api_bp

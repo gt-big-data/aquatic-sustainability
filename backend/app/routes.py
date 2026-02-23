@@ -79,7 +79,7 @@ def mongoDB_uri():
     return {"mongoDBUri": key}
 
 @bp.route('/register', methods=['POST'])
-@cross_origin(origins="https://aquatic-sustainability.vercel.app", methods=["POST", "OPTIONS"])
+@cross_origin(origins="https://aquatic-sustainability-834508815183.us-east1.run.app/", methods=["POST", "OPTIONS"])
 def register():
     print("registering attempt now")
     if not supabase:
