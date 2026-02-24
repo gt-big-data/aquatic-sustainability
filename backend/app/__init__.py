@@ -3,8 +3,12 @@ from flask_cors import CORS
 from supabase import create_client
 from .config import Config
 import os
-from redis import Redis
-from rq import Queue
+try:
+    from redis import Redis
+    from rq import Queue
+    RQ_AVAILABLE = True
+except (ImportError, ValueError):
+    RQ_AVAILABLE = False
 
 redis_conn = None
 # Initialize supabase client only if credentials are available
@@ -78,13 +82,21 @@ def create_app():
         return "File not found", 404
 
     global redis_conn
-    redis_conn = Redis.from_url(app.config['REDIS_URL'])
-
-    app.redis = redis_conn
-    app.task_queue = Queue(
-        app.config.get('RQ_DEFAULT_QUEUE', 'flood-jobs'),
-        connection=redis_conn
-        # job_timeout='15m'  # optional, if SMAP downloads are long
-    )
+    if RQ_AVAILABLE:
+        try:
+            redis_conn = Redis.from_url(app.config['REDIS_URL'])
+            app.redis = redis_conn
+            app.task_queue = Queue(
+                app.config.get('RQ_DEFAULT_QUEUE', 'flood-jobs'),
+                connection=redis_conn
+            )
+        except Exception as e:
+            print(f"Warning: Could not connect to Redis: {e}. Background jobs will be unavailable.")
+            app.redis = None
+            app.task_queue = None
+    else:
+        print("Warning: rq/redis unavailable (not supported on Windows without a Unix fork context).")
+        app.redis = None
+        app.task_queue = None
 
     return app
