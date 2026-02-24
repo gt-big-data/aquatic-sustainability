@@ -30,7 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	const token = localStorage.getItem('access_token');
 	if (!isLogin && !isRegister) {
 		// Protected page: redirect to login if not authenticated
-		if (!token) {
+		//TODO: Delete this local storage thing for skipping login (just for dev convenience) - Josh
+		if (!localStorage.getItem("skippedLogin") && !token) {
 			window.location.href = '/login';
 		}
 	} else {

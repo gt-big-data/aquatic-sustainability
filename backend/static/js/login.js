@@ -1,3 +1,10 @@
+//TODO: Delete this event listener for prod; only here for easy testing - Josh
+const skipBtn = document.getElementById("skipBtn");
+skipBtn.addEventListener("click", () => {
+    localStorage.setItem("skippedLogin", true);
+    window.location.href = "/";
+});
+
 const loginForm = document.getElementById("loginForm");
 if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
@@ -13,6 +20,7 @@ if (loginForm) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password })
             });
+            console.log(res);
 
             let data = null;
             try { data = await res.json(); } catch (err) { /* non-json response */ }
