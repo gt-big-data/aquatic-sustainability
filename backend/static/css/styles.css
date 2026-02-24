@@ -315,7 +315,7 @@ select, input[type="range"], input[type="text"], input[type="number"] {
   background: linear-gradient(135deg, #0077b6, #00b4d8, #90e0ef);
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .login-container {
@@ -337,15 +337,12 @@ select, input[type="range"], input[type="text"], input[type="number"] {
   width: 100%;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   margin: 0 auto;
-  max-height: calc(100vh - 220px); /* keep the card shorter than the viewport */
-  overflow: auto; /* allow inner scrolling if content is tall (prevents card from flowing to page bottom) */
   position: relative;
   z-index: 2; /* sit above animated background */
 }
 
-/* Taller registration card specifically (reduces need to scroll on register form) */
+/* Taller registration card specifically */
 .login-page-body.register-page .login-card {
-  max-height: calc(100vh - 100px); /* more room for the card */
   padding: 40px; /* slightly more inner spacing */
 }
 
@@ -358,11 +355,11 @@ select, input[type="range"], input[type="text"], input[type="number"] {
   /* On smaller screens, stop shifting and allow more natural stacking */
   .login-page-body.register-page .login-card {
     transform: none;
-    max-height: calc(100vh - 80px);
     padding: 28px;
   }
 }
-.login-card h1 { margin-top: 0; color: #1e3a8a; }
+.login-card h1 { margin-top: 0; margin-bottom: 4px; color: #1e3a8a; }
+.login-card > .muted { margin-top: 4px; }
 .login-form { margin-top: 24px; }
 .form-group { margin-bottom: 18px; }
 .form-group label { display: block; margin-bottom: 6px; font-weight: 600; color: #1e40af; }
@@ -402,7 +399,7 @@ select, input[type="range"], input[type="text"], input[type="number"] {
 /* Animated water-like background for login/register pages */
 .login-page-body::before {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0; /* behind the card (card is z-index:2) */
   pointer-events: none;
@@ -425,7 +422,7 @@ select, input[type="range"], input[type="text"], input[type="number"] {
 /* Optional subtle overlay stripes to add depth (low opacity) */
 .login-page-body::after {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 1;
   pointer-events: none;
