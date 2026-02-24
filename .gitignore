@@ -8,3 +8,6 @@ backend/gpm_temp/
 # Local config / secrets
 .env
 backend/.env
+
+# Python virtual environment
+venv/
