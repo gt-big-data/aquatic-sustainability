@@ -72,12 +72,6 @@ def maps_key():
     key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
     return {"googleMapsApiKey": key}
 
-@bp.route("/config/mongoDB-uri")
-def mongoDB_uri():
-    """Provide MongoDB connnection URI"""
-    key = current_app.config.get("MONGODB_URI", "")
-    return {"mongoDBUri": key}
-
 @bp.route('/register', methods=['POST'])
 @cross_origin(origins="https://aquatic-sustainability-834508815183.us-east1.run.app/", methods=["POST", "OPTIONS"])
 def register():
