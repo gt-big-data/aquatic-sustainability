@@ -60,26 +60,35 @@ img_width = 400
 
 # In[7]:
 
-
-train_ds = tf.keras.utils.image_dataset_from_directory(
+# Load all data first
+all_ds = tf.keras.utils.image_dataset_from_directory(
   data_dir,
-  validation_split=0.2,
-  subset="training",
   seed=123,
   image_size=(img_height, img_width),
-  batch_size=batch_size)
+  batch_size=batch_size,
+  shuffle=True)
+
+# Calculate split sizes
+total_batches = tf.data.experimental.cardinality(all_ds).numpy()
+train_size = int(0.7 * total_batches)
+val_size = int(0.15 * total_batches)
+test_size = total_batches - train_size - val_size
+
+# Split the dataset
+train_ds = all_ds.take(train_size)
+remaining = all_ds.skip(train_size)
+val_ds = remaining.take(val_size)
+test_ds = remaining.skip(val_size)
+
+print(f"Training batches: {train_size}")
+print(f"Validation batches: {val_size}")
+print(f"Test batches: {test_size}")
 
 
 # In[8]:
 
-
-val_ds = tf.keras.utils.image_dataset_from_directory(
-  data_dir,
-  validation_split=0.2,
-  subset="validation",
-  seed=123,
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
+# Remove or comment out the old val_ds creation
+# val_ds = tf.keras.utils.image_dataset_from_directory(...)
 
 
 # In[9]:
@@ -95,6 +104,7 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 train_ds = train_ds.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
 val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 
 # In[11]:
@@ -256,7 +266,15 @@ model.summary()
 
 # In[25]:
 
+# Initialize accumulated history dictionary
+accumulated_history = {
+    'accuracy': [],
+    'val_accuracy': [],
+    'loss': [],
+    'val_loss': []
+}
 
+# First training session
 epochs = 75
 history = model.fit(
   train_ds,
@@ -264,19 +282,28 @@ history = model.fit(
   epochs=epochs
 )
 
+# Append to accumulated history
+for key in accumulated_history.keys():
+    accumulated_history[key].extend(history.history[key])
+
+# For subsequent training sessions, do:
+# history = model.fit(train_ds, validation_data=val_ds, epochs=25)
+# for key in accumulated_history.keys():
+#     accumulated_history[key].extend(history.history[key])
+
 
 # # Results #2
 
 # In[22]:
 
 
-acc = history.history['accuracy']
-val_acc = history.history['val_accuracy']
+acc = accumulated_history['accuracy']
+val_acc = accumulated_history['val_accuracy']
 
-loss = history.history['loss']
-val_loss = history.history['val_loss']
+loss = accumulated_history['loss']
+val_loss = accumulated_history['val_loss']
 
-epochs_range = range(epochs)
+epochs_range = range(len(acc))
 
 plt.figure(figsize=(8, 8))
 plt.subplot(1, 2, 1)
@@ -357,7 +384,73 @@ plt.show()
 model.save("model.keras")
 
 
-# In[ ]:
+# In[28]:
+
+from sklearn.metrics import confusion_matrix, classification_report, f1_score, precision_score, recall_score, accuracy_score
+
+# Get predictions on test set
+y_true = []
+y_pred = []
+
+for images, labels in test_ds:
+    predictions = model.predict(images)
+    predicted_labels = tf.argmax(predictions, axis=1)
+    y_true.extend(labels.numpy())
+    y_pred.extend(predicted_labels.numpy())
+
+# Convert to numpy arrays
+y_true = np.array(y_true)
+y_pred = np.array(y_pred)
+
+# Calculate confusion matrix
+cm = confusion_matrix(y_true, y_pred)
+tn, fp, fn, tp = cm.ravel()
+
+# Calculate metrics
+accuracy = accuracy_score(y_true, y_pred)
+precision = precision_score(y_true, y_pred)
+recall = recall_score(y_true, y_pred)
+f1 = f1_score(y_true, y_pred)
+
+# Print results
+print("=" * 50)
+print("TEST SET EVALUATION")
+print("=" * 50)
+print(f"\nConfusion Matrix:")
+print(f"TN: {tn}  FP: {fp}")
+print(f"FN: {fn}  TP: {tp}")
+print(f"\nMetrics:")
+print(f"Accuracy:  {accuracy:.4f}")
+print(f"Precision: {precision:.4f}")
+print(f"Recall:    {recall:.4f}")
+print(f"F1 Score:  {f1:.4f}")
+print("\n" + "=" * 50)
+
+# Detailed classification report
+print("\nDetailed Classification Report:")
+print(classification_report(y_true, y_pred, target_names=class_names))
+
+# Visualize confusion matrix
+plt.figure(figsize=(8, 6))
+plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+plt.title('Confusion Matrix - Test Set')
+plt.colorbar()
+tick_marks = np.arange(len(class_names))
+plt.xticks(tick_marks, class_names)
+plt.yticks(tick_marks, class_names)
+
+# Add text annotations
+thresh = cm.max() / 2.
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, format(cm[i, j], 'd'),
+                ha="center", va="center",
+                color="white" if cm[i, j] > thresh else "black")
+
+plt.ylabel('True label')
+plt.xlabel('Predicted label')
+plt.tight_layout()
+plt.show()
 
 
 

@@ -364,7 +364,8 @@ def main():
                         datetime_acq, 
                         float(p)
                     )
-                    sample_path = os.path.join(args.results_dir, f"sample_chip_inference_{tidx}.jpg")
+                    sample_path = os.path.join(args.results_dir, f"images/sample_chip_inference_{tidx}.jpg")
+                    # sample_path = f"/images/sample_chip_inference_{tidx}.jpg"
                     Image.fromarray(proc[:,:,0]).save(sample_path)
                     print(f"Saved sample chip to {sample_path}")
                     saved_count += 1
@@ -388,7 +389,8 @@ def main():
                     datetime_acq, 
                     float(p)
                 )
-                sample_path = os.path.join(args.results_dir, f"sample_chip_inference_{tidx}.jpg")
+                sample_path = os.path.join(args.results_dir, f"images/sample_chip_inference_{tidx}.jpg")
+                # sample_path = f"/images/sample_chip_inference_{tidx}.jpg"
                 Image.fromarray(proc[:,:,0]).save(sample_path)
                 print(f"Saved sample chip to {sample_path}")
                 saved_count += 1
