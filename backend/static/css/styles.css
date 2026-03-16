@@ -455,17 +455,17 @@ select, input[type="range"], input[type="text"], input[type="number"] {
   background: repeating-linear-gradient(
     175deg,
     rgba(255,255,255,0.00)  0px,
-    rgba(255,255,255,0.06) 10px,
-    rgba(255,255,255,0.10) 18px,
-    rgba(255,255,255,0.06) 26px,
-    rgba(0, 60, 100, 0.04) 34px,
+    rgba(255,255,255,0.12) 10px,
+    rgba(255,255,255,0.18) 18px,
+    rgba(255,255,255,0.12) 26px,
+    rgba(0, 60, 100, 0.08) 34px,
     rgba(0, 60, 100, 0.00) 44px
   );
   background-size: 100% 44px;
   filter: url(#ripple);
-  animation: rippleShift 12s ease-in-out infinite;
+  animation: rippleShift 5s ease-in-out infinite;
   mix-blend-mode: overlay;
-  opacity: 0.8;
+  opacity: 1;
 }
 
 @keyframes caustics {
@@ -485,17 +485,17 @@ select, input[type="range"], input[type="text"], input[type="number"] {
   background: repeating-linear-gradient(
     168deg,
     rgba(255,255,255,0.00)  0px,
-    rgba(255,255,255,0.04) 14px,
-    rgba(255,255,255,0.07) 24px,
-    rgba(255,255,255,0.04) 34px,
-    rgba(0, 40, 80, 0.03)  42px,
+    rgba(255,255,255,0.08) 14px,
+    rgba(255,255,255,0.14) 24px,
+    rgba(255,255,255,0.08) 34px,
+    rgba(0, 40, 80, 0.06)  42px,
     rgba(0, 40, 80, 0.00)  56px
   );
   background-size: 100% 56px;
   filter: url(#ripple2);
-  animation: rippleShift2 18s ease-in-out infinite;
+  animation: rippleShift2 7.5s ease-in-out infinite;
   mix-blend-mode: overlay;
-  opacity: 0.7;
+  opacity: 0.9;
 }
 
 @keyframes rippleShift {
