@@ -52,6 +52,10 @@ def create_app():
     @app.route("/water")
     def water():
         return send_from_directory(app.static_folder + "/pages", "water.html")
+    # News & Updates
+    @app.route("/news")
+    def news():
+        return send_from_directory(app.static_folder + "/pages", "news.html")
 
     # Pages routes
     #@app.route("/pages/flood-drought.html")

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>News & Updates · Aquatic Sustainability</title>
+<link rel="stylesheet" href="/static/css/styles.css" />
+<style>
+  /* News page specific styles */
+  .news-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  .news-header {
+    margin-bottom: 40px;
+  }
+
+  .news-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .news-header p {
+    font-size: 1.1rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  .filter-tab {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    transition: all 0.3s ease;
+  }
+
+  .filter-tab.active {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+  }
+
+  .filter-tab:hover {
+    color: var(--text);
+  }
+
+  .news-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .news-item {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    background: var(--card-bg);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .news-item:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+
+  html:not(.light) .news-item:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .news-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 16px;
+  }
+
+  .news-item-title {
+    margin: 0;
+    font-size: 1.3rem;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .news-item-date {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .news-category {
+    display: inline-block;
+    padding: 4px 12px;
+    background: var(--bg);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--brand);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .news-category.flood {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .news-category.drought {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .news-category.pollution {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .news-category.research {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+  }
+
+  .news-category.policy {
+    color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.1);
+  }
+
+  .news-item-content {
+    margin-bottom: 16px;
+  }
+
+  .news-item-excerpt {
+    color: var(--text);
+    line-height: 1.6;
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .news-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .news-source {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .read-more {
+    color: var(--brand);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+
+  .read-more:hover {
+    text-decoration: underline;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--muted);
+  }
+
+  .empty-state h3 {
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="../">
+<img src="/static/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
+<span class="brand-title">Aquatic Sustainability</span>
+</a>
+<nav class="top-nav">
+<a href="/flood-drought">Flood/Drought</a>
+<a href="/oil-spill">Oil Spill</a>
+<a class="active" href="/news">News</a>
+<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
+<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
+</nav>
+</header>
+
+<main class="workspace">
+<div class="news-container">
+<div class="news-header">
+<h1>News & Updates</h1>
+<p>Stay informed on the latest developments in aquatic sustainability, water conservation, flood prediction, and environmental research.</p>
+</div>
+
+<div class="filter-tabs">
+<button class="filter-tab active" data-filter="all">All News</button>
+<button class="filter-tab" data-filter="flood">Flood/Drought</button>
+<button class="filter-tab" data-filter="pollution">Pollution</button>
+<button class="filter-tab" data-filter="research">Research</button>
+<button class="filter-tab" data-filter="policy">Policy</button>
+</div>
+
+<div class="news-feed" id="newsFeed">
+<!-- News items will be inserted here -->
+</div>
+</div>
+</main>
+
+<footer class="site-footer">
+<small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water & Sanitation</small>
+</footer>
+
+<script>
+  const newsData = [];
+
+  let currentFilter = 'all';
+
+  function renderNews(filter = 'all') {
+    const newsFeed = document.getElementById('newsFeed');
+    newsFeed.innerHTML = '';
+
+    const filteredNews = filter === 'all' 
+      ? newsData 
+      : newsData.filter(item => item.category === filter);
+
+    if (filteredNews.length === 0) {
+      newsFeed.innerHTML = `
+        <div class="empty-state">
+          <h3>No news found</h3>
+          <p>Try selecting a different category to see more news.</p>
+        </div>
+      `;
+      return;
+    }
+
+    filteredNews.forEach(newsItem => {
+      const date = new Date(newsItem.date);
+      const formattedDate = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      const newsElement = document.createElement('article');
+      newsElement.className = 'news-item';
+      newsElement.innerHTML = `
+        <div class="news-item-header">
+          <div style="flex: 1;">
+            <span class="news-category ${newsItem.category}">${newsItem.category}</span>
+            <h2 class="news-item-title">${newsItem.title}</h2>
+          </div>
+          <div class="news-item-date">${formattedDate}</div>
+        </div>
+        <div class="news-item-content">
+          <p class="news-item-excerpt">${newsItem.excerpt}</p>
+        </div>
+        <div class="news-item-footer">
+          <div>
+            <div class="news-source">${newsItem.source}</div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">${newsItem.read_time}</div>
+          </div>
+          <a href="#" class="read-more">Read Full Article →</a>
+        </div>
+      `;
+      
+      newsElement.addEventListener('click', (e) => {
+        if (e.target.classList.contains('read-more')) {
+          e.preventDefault();
+        }
+        // Could open a modal or navigate to full article in future
+      });
+
+      newsFeed.appendChild(newsElement);
+    });
+  }
+
+  // Filter tab event listeners
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.filter;
+      renderNews(currentFilter);
+    });
+  });
+
+  // Initial render
+  document.addEventListener('DOMContentLoaded', () => {
+    renderNews();
+  });
+</script>
+
+<script src="/static/js/main.js" defer></script>
+<script src="/static/js/pages/news.js" defer></script>
+</body>
+</html>
