@@ -179,6 +179,7 @@ def login():
         "access_token": access_token,
         "refresh_token": refresh_token
     }), 200
+
 @bp.route("/drought")
 def get_drought_data():
     # Drought regions with detailed polygon coordinates for accurate shapes
