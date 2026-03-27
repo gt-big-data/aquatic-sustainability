@@ -39,7 +39,12 @@ steps:
       - '10'
       - '--timeout'
       - '300'
-      - '--startup-cpu-boost'
+      # Optional: Uncomment if CPU boost is available in your region
+      # - '--cpu-boost'
+      # Uncomment and set substitution variables to pass env vars during build
+      # Or set them manually in Cloud Run console after deployment
+      # - '--set-env-vars'
+      # - 'SECRET_KEY=${_SECRET_KEY},GOOGLE_MAPS_API_KEY=${_GOOGLE_MAPS_API_KEY},SUPABASE_URL=${_SUPABASE_URL},SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY},MONGODB_URI=${_MONGODB_URI}'
     id: 'deploy-cloud-run'
     waitFor: ['push-image-sha']
 
