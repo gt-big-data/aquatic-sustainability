@@ -2,6 +2,7 @@
 # NASA / model caches
 backend/data/
 backend/gpm_temp/
+coral reef analysis/datasets
 *.npy
 *.HDF5
 
