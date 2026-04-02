@@ -14,10 +14,32 @@
 
 set -euo pipefail
 
+# Optional CLI args passed after the sbatch script path:
+#   sbatch run_bleaching_lstm.sbatch --data-path /path/to/file.npz --output-dir /path/to/out
+CLI_DATA_PATH=""
+CLI_OUTPUT_DIR=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --data-path)
+      CLI_DATA_PATH="$2"
+      shift 2
+      ;;
+    --output-dir)
+      CLI_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Usage: sbatch run_bleaching_lstm.sbatch [--data-path PATH] [--output-dir DIR]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 # Defaults to the directory where you submit sbatch from.
 PROJECT_DIR="${PROJECT_DIR:-$SLURM_SUBMIT_DIR}"
-DATA_PATH="${DATA_PATH:-$PROJECT_DIR/datasets/sequences.npz}"
-OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_DIR/outputs/$SLURM_JOB_ID}"
+DATA_PATH="${CLI_DATA_PATH:-${DATA_PATH:-$PROJECT_DIR/datasets/sequences_reduced_16.npz}}"
+OUTPUT_DIR="${CLI_OUTPUT_DIR:-${OUTPUT_DIR:-$PROJECT_DIR/outputs/$SLURM_JOB_ID}}"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$PROJECT_DIR"

@@ -1,8 +1,8 @@
 """
 LSTM model for coral bleaching severity prediction.
 
-Input:  52-week sequences of 7 thermal stress features
-Output: 4-class ordinal bleaching severity (none/low/moderate/severe)
+Input:  sequence windows of thermal stress features (shape inferred from data)
+Output: ordinal bleaching severity classes (class count inferred from data)
 
 Architecture:
   - Unidirectional LSTM (forward-only temporal encoding)
@@ -65,6 +65,15 @@ def load_state_dict_compat(model, checkpoint_path):
     except TypeError:
         state_dict = torch.load(checkpoint_path, map_location=DEVICE)
     model.load_state_dict(state_dict)
+
+
+def class_names_for(n_classes):
+    """Return display names for common bleaching label schemes."""
+    if n_classes == 4:
+        return ["None (0%)", "Low (1-10%)", "Moderate (10-50%)", "Severe (>50%)"]
+    if n_classes == 3:
+        return ["None (0%)", "Moderate (1-50%)", "Severe (>50%)"]
+    return [f"Class {i}" for i in range(n_classes)]
 
 # ──────────────────────────────────────────────────────────────
 # DATASET
@@ -158,14 +167,14 @@ class BleachingLSTM(nn.Module):
         )
     
     def forward(self, x_seq, x_static):
-        # x_seq: (batch, 52, 7)
+        # x_seq: (batch, seq_len, n_features)
         # x_static: (batch, 2)
         
         # Project input features
-        x = self.input_proj(x_seq)  # (batch, 52, hidden//2)
+        x = self.input_proj(x_seq)  # (batch, seq_len, hidden//2)
         
         # LSTM
-        lstm_out, (h_n, _) = self.lstm(x)  # lstm_out: (batch, 52, hidden)
+        lstm_out, (h_n, _) = self.lstm(x)  # lstm_out: (batch, seq_len, hidden)
         
         # Attention-weighted context
         attn_context, attn_weights = self.attention(lstm_out)  # (batch, hidden)
@@ -183,12 +192,12 @@ class BleachingLSTM(nn.Module):
 # ──────────────────────────────────────────────────────────────
 # TRAINING UTILITIES
 # ──────────────────────────────────────────────────────────────
-def get_class_weights(y):
+def get_class_weights(y, n_classes):
     """Inverse frequency weighting for imbalanced classes."""
     counts = Counter(y.tolist())
     total = sum(counts.values())
     weights = {c: total / (len(counts) * n) for c, n in counts.items()}
-    return torch.FloatTensor([weights[i] for i in range(N_CLASSES)]).to(DEVICE)
+    return torch.FloatTensor([weights.get(i, 1.0) for i in range(n_classes)]).to(DEVICE)
 
 
 def get_weighted_sampler(y):
@@ -201,7 +210,7 @@ def get_weighted_sampler(y):
 
 def normalize_features(X_train, X_val, X_test):
     """Per-feature normalization using training set statistics."""
-    # X shape: (N, 52, 7)
+    # X shape: (N, seq_len, n_features)
     mean = X_train.reshape(-1, X_train.shape[-1]).mean(axis=0)
     std = X_train.reshape(-1, X_train.shape[-1]).std(axis=0)
     std[std == 0] = 1  # Avoid division by zero
@@ -228,6 +237,21 @@ def normalize_static(meta_train, meta_val, meta_test):
     meta_test_norm[:, :2] = (meta_test[:, :2] - mean) / std
     
     return meta_train_norm, meta_val_norm, meta_test_norm
+
+# ──────────────────────────────────────────────────────────────
+# FOCAL LOSS
+# ──────────────────────────────────────────────────────────────
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0):
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha  # class weights tensor
+
+    def forward(self, logits, targets):
+        ce_loss = F.cross_entropy(logits, targets, weight=self.alpha, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+        return focal_loss.mean()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -260,7 +284,16 @@ def train(
     print(f"  Output dir: {output_dir}")
     data = np.load(data_path)
     X, y, meta = data["X"], data["y"], data["meta"]
+    if X.ndim != 3:
+        raise ValueError(f"Expected X to have shape (N, seq_len, n_features), got {X.shape}")
+    if meta.ndim != 2 or meta.shape[1] < 2:
+        raise ValueError(f"Expected meta to have at least 2 columns (lat/lon), got {meta.shape}")
+
+    seq_len = int(X.shape[1])
+    n_features = int(X.shape[2])
+    n_classes = int(np.max(y)) + 1
     print(f"  X: {X.shape}, y: {y.shape}, meta: {meta.shape}")
+    print(f"  Inferred seq_len={seq_len}, n_features={n_features}, n_classes={n_classes}")
     print(f"  Device: {DEVICE}")
     
     # Stratified split: 70/15/15
@@ -290,14 +323,15 @@ def train(
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     
     # Model
-    model = BleachingLSTM().to(DEVICE)
+    model = BleachingLSTM(n_features=n_features, n_classes=n_classes).to(DEVICE)
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"\n  Model parameters: {total_params:,} ({trainable_params:,} trainable)")
     
     # Loss and optimizer
-    class_weights = get_class_weights(y_train)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    class_weights = get_class_weights(y_train, n_classes=n_classes)
+    # criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = FocalLoss(alpha=class_weights, gamma=2.0)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     
@@ -423,13 +457,22 @@ def train(
     all_labels = np.array(all_labels)
     all_attn = np.concatenate(all_attn, axis=0)
     
-    class_names = ["None (0%)", "Low (1-10%)", "Moderate (10-50%)", "Severe (>50%)"]
+    class_names = class_names_for(n_classes)
+    label_order = list(range(n_classes))
     
     print("\nClassification Report:")
-    print(classification_report(all_labels, all_preds, target_names=class_names))
+    print(
+        classification_report(
+            all_labels,
+            all_preds,
+            labels=label_order,
+            target_names=class_names,
+            zero_division=0,
+        )
+    )
     
     print("Confusion Matrix:")
-    cm = confusion_matrix(all_labels, all_preds)
+    cm = confusion_matrix(all_labels, all_preds, labels=label_order)
     print(f"{'':>15} | " + " | ".join(f"{n:>8}" for n in class_names))
     print("-" * 70)
     for i, row in enumerate(cm):
@@ -438,10 +481,11 @@ def train(
     # Attention analysis: which weeks matter most?
     print("\nAttention Analysis (mean attention weight by week):")
     mean_attn = all_attn.mean(axis=0)
-    top_weeks = np.argsort(mean_attn)[::-1][:10]
-    print(f"  Top 10 most attended weeks (0=oldest, 51=most recent):")
+    top_k = min(10, seq_len)
+    top_weeks = np.argsort(mean_attn)[::-1][:top_k]
+    print(f"  Top {top_k} most attended weeks (0=oldest, {seq_len-1}=most recent):")
     for w in top_weeks:
-        print(f"    Week {w:2d} (t-{52-w:2d} weeks before event): {mean_attn[w]:.4f}")
+        print(f"    Week {w:2d} (t-{seq_len-w:2d} weeks before event): {mean_attn[w]:.4f}")
     
     # Save everything
     np.savez(

@@ -28,7 +28,7 @@ GCBD_PATH = "datasets/global_bleaching_environmental.csv"
 SST_PATH = "datasets/cortadv6_FilledSST.nc"
 SSTA_PATH = "datasets/cortadv6_SSTA.nc"
 TSA_PATH = "datasets/cortadv6_TSA.nc"
-OUTPUT_PATH = "datasets/sequences.npz"
+OUTPUT_PATH = "datasets/sequences_reduced_16.npz"
 
 # # Bleaching severity bins: 0=none, 1=low, 2=moderate, 3=severe
 # BLEACH_BINS = [-1, 1, 10, 50, 100]

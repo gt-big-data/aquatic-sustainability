@@ -4,6 +4,7 @@ backend/data/
 backend/gpm_temp/
 *.npy
 *.HDF5
+*.pyc
 
 # Local config / secrets
 .env
