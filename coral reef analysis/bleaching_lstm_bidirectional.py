@@ -5,7 +5,7 @@ Input:  52-week sequences of 7 thermal stress features
 Output: 4-class ordinal bleaching severity (none/low/moderate/severe)
 
 Architecture:
-  - Unidirectional LSTM (forward-only temporal encoding)
+  - Bidirectional LSTM (captures both buildup and recent cooling)
   - 2 LSTM layers with dropout
   - Attention mechanism (learns which weeks matter most)
   - Static features (lat, lon) concatenated before classification head
@@ -130,22 +130,22 @@ class BleachingLSTM(nn.Module):
             nn.Dropout(dropout * 0.5),
         )
         
-        # Unidirectional LSTM (forward-only)
+        # Bidirectional LSTM
         self.lstm = nn.LSTM(
             input_size=hidden_size // 2,
             hidden_size=hidden_size,
             num_layers=n_layers,
             batch_first=True,
             dropout=dropout if n_layers > 1 else 0,
-            bidirectional=False,
+            bidirectional=True,
         )
         
         # Attention over LSTM outputs
-        self.attention = TemporalAttention(hidden_size)
+        self.attention = TemporalAttention(hidden_size * 2)  # *2 for bidirectional
         
         # Classification head
         # Combines: attention context + last hidden state + static features
-        head_input_size = hidden_size + hidden_size + n_static
+        head_input_size = hidden_size * 2 + hidden_size * 2 + n_static
         
         self.classifier = nn.Sequential(
             nn.Linear(head_input_size, hidden_size),
@@ -165,13 +165,13 @@ class BleachingLSTM(nn.Module):
         x = self.input_proj(x_seq)  # (batch, 52, hidden//2)
         
         # LSTM
-        lstm_out, (h_n, _) = self.lstm(x)  # lstm_out: (batch, 52, hidden)
+        lstm_out, (h_n, _) = self.lstm(x)  # lstm_out: (batch, 52, hidden*2)
         
         # Attention-weighted context
-        attn_context, attn_weights = self.attention(lstm_out)  # (batch, hidden)
+        attn_context, attn_weights = self.attention(lstm_out)  # (batch, hidden*2)
         
-        # Last timestep hidden state
-        last_hidden = lstm_out[:, -1, :]  # (batch, hidden)
+        # Last timestep hidden state (concat forward and backward)
+        last_hidden = lstm_out[:, -1, :]  # (batch, hidden*2)
         
         # Combine everything
         combined = torch.cat([attn_context, last_hidden, x_static], dim=1)
