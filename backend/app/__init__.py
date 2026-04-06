@@ -39,6 +39,9 @@ def create_app():
     @app.route("/register")
     def register():
         return send_from_directory(app.static_folder + "/pages", "register.html")
+    @app.route("/about")
+    def about():
+        return send_from_directory(app.static_folder + "/pages", "about.html")
     # this is based on the figma design
     # Pollution & Marine Health
     @app.route("/oil-spill")
