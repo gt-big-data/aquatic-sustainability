@@ -127,19 +127,14 @@
     background: rgba(245, 158, 11, 0.1);
   }
 
-  .news-category.pollution {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
+  .news-category.coral {
+    color: #0ea5e9;
+    background: rgba(14, 165, 233, 0.12);
   }
 
-  .news-category.research {
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.1);
-  }
-
-  .news-category.policy {
-    color: #8b5cf6;
-    background: rgba(139, 92, 246, 0.1);
+  .news-category.flood {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
   }
 
   .news-item-content {
@@ -209,15 +204,14 @@
 <div class="news-container">
 <div class="news-header">
 <h1>News & Updates</h1>
-<p>Stay informed on the latest developments in aquatic sustainability, water conservation, flood prediction, and environmental research.</p>
+<p>Stay informed on the latest developments in aquatic sustainability, water conservation, and environmental research.</p>
 </div>
 
 <div class="filter-tabs">
 <button class="filter-tab active" data-filter="all">All News</button>
-<button class="filter-tab" data-filter="flood">Flood/Drought</button>
-<button class="filter-tab" data-filter="pollution">Pollution</button>
-<button class="filter-tab" data-filter="research">Research</button>
-<button class="filter-tab" data-filter="policy">Policy</button>
+<button class="filter-tab" data-filter="coral">Coral Reefs</button>
+<button class="filter-tab" data-filter="flood">Flooding</button>
+<button class="filter-tab" data-filter="drought">Droughts</button>
 </div>
 
 <div class="news-feed" id="newsFeed">
@@ -232,6 +226,13 @@
 
 <script>
   const newsData = [];
+
+  const categoryLabels = {
+    all: 'All News',
+    coral: 'Coral Reefs',
+    flood: 'Flooding',
+    drought: 'Droughts'
+  };
 
   let currentFilter = 'all';
 
@@ -263,10 +264,11 @@
 
       const newsElement = document.createElement('article');
       newsElement.className = 'news-item';
+      const categoryLabel = categoryLabels[newsItem.category] || newsItem.category;
       newsElement.innerHTML = `
         <div class="news-item-header">
           <div style="flex: 1;">
-            <span class="news-category ${newsItem.category}">${newsItem.category}</span>
+            <span class="news-category ${newsItem.category}">${categoryLabel}</span>
             <h2 class="news-item-title">${newsItem.title}</h2>
           </div>
           <div class="news-item-date">${formattedDate}</div>
@@ -279,19 +281,35 @@
             <div class="news-source">${newsItem.source}</div>
             <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">${newsItem.read_time}</div>
           </div>
-          <a href="#" class="read-more">Read Full Article →</a>
+          <a href="${newsItem.url}" class="read-more" target="_blank" rel="noopener noreferrer">Read Full Article →</a>
         </div>
       `;
-      
-      newsElement.addEventListener('click', (e) => {
-        if (e.target.classList.contains('read-more')) {
-          e.preventDefault();
-        }
-        // Could open a modal or navigate to full article in future
-      });
 
       newsFeed.appendChild(newsElement);
     });
+  }
+
+  async function loadNews() {
+    const newsFeed = document.getElementById('newsFeed');
+    newsFeed.innerHTML = `<div class="empty-state"><h3>Loading news...</h3><p>Please wait while we fetch relevant articles.</p></div>`;
+
+    try {
+      const response = await fetch('/api/news');
+      if (!response.ok) {
+        throw new Error(`News request failed: ${response.status}`);
+      }
+      const payload = await response.json();
+      newsData.push(...(payload.articles || []));
+      renderNews(currentFilter);
+    } catch (error) {
+      newsFeed.innerHTML = `
+        <div class="empty-state">
+          <h3>Unable to load news</h3>
+          <p>Check your connection or try again later.</p>
+        </div>
+      `;
+      console.error(error);
+    }
   }
 
   // Filter tab event listeners
@@ -306,7 +324,7 @@
 
   // Initial render
   document.addEventListener('DOMContentLoaded', () => {
-    renderNews();
+    loadNews();
   });
 </script>
 

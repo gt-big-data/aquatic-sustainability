@@ -13,6 +13,7 @@ class Config:
     MONGODB_URI = os.getenv("MONGODB_URI", "")
     EDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
     RQ_DEFAULT_QUEUE = os.environ.get('RQ_DEFAULT_QUEUE', 'flood-jobs')
+    NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 
     REDIS_URL = "redis://localhost:6379/0"
 
