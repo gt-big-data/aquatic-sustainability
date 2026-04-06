@@ -15,13 +15,17 @@ const teamLeads = [
 
 //TODO: Update member info here
 const teamMembers = [
+  { name: "William Gao", username: "william-gao-709a0a17b", role: "Platform" },
   { name: "Joshua Hevelow", username: "joshhevelow", role: "Data Viz" },
-  { name: "Joshua Hevelow", username: "joshhevelow", role: "Data Viz" },
-  { name: "Joshua Hevelow", username: "joshhevelow", role: "Data Viz" },
-  { name: "Grace", username: "joshhevelow", role: "Platform" },
-  { name: "Quinten", username: "joshhevelow", role: "Analysis" },
-  { name: "Test Johnson", username: "joshhevelow", role: "Analysis" },
-  { name: "Dean Chen", username: "joshhevelow", role: "Analysis" }
+  { name: "Joshua Kim", username: "joshuakim", role: "Platform" },
+  { name: "Quinten Lemoine", username: "quintenlemoine", role: "Analysis" },
+  { name: "Surya Narasimhan", username: "surya-narasimhan", role: "Analysis" },
+  { name: "Anish Neema", username: "anishneema", role: "Analysis" },
+  { name: "Deepesh Raj", username: "deepesh-raj", role: "Data Viz" },
+  { name: "Anoushka Scaria", username: "anoushka-scaria-0a8080313", role: "Data Viz" },
+  { name: "Grace Shao", username: "grace-shao-gt-cs", role: "Platform" },
+  { name: "Vaibhav Wudaru", username: "vaibhav-wudaru-9605aa248", role: "Platform/Analysis" }
+  
 ];
 
 /* ===== CARD GENERATOR ===== */
@@ -34,7 +38,10 @@ function createCard(member, isLead = false) {
   avatar.className = "team-avatar";
 
   // Fallback avatar (safe)
-  avatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=random`;
+    avatar.src = `/static/assets/images/team/${member.username}.jpg`;
+    avatar.onerror = () => {
+    avatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}`;
+    };
 
   const name = document.createElement("h3");
   name.className = "team-name";
