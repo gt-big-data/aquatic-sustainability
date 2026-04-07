@@ -1,3 +1,8 @@
+from datetime import datetime, timedelta
+import urllib.parse
+
+import certifi
+import requests
 from flask import Blueprint, current_app, request, jsonify
 from flask_cors import cross_origin
 from rq.job import Job
@@ -8,6 +13,105 @@ import random
 
 bp = Blueprint("api", __name__)
 # app/routes.py
+
+news_cache = {
+    "timestamp": None,
+    "articles": []
+}
+
+NEWS_QUERY = "(coral reef OR marine ecosystem OR ocean conservation) OR (aquatic sustainability OR water pollution) OR (flooding AND water) OR (drought AND water) OR (marine biodiversity OR coral bleaching)"
+CACHE_TTL = timedelta(minutes=10)
+
+
+def categorize_article(title: str, description: str, content: str) -> str:
+    text = " ".join([title, description, content]).lower()
+    
+    # Coral & marine ecosystems
+    if any(keyword in text for keyword in ["coral reef", "coral reefs", "coral bleaching", "marine ecosystem", "ocean health", "marine biodiversity", "marine conservation"]):
+        return "coral"
+    
+    # Flooding with aquatic/water context
+    if any(keyword in text for keyword in ["flood", "flooding", "flash flood", "river overflow", "water surge"]) and any(kw in text for kw in ["water", "aquatic", "river", "lake", "coastal", "ecosystem"]):
+        return "flood"
+    
+    # Drought with aquatic/water context
+    if any(keyword in text for keyword in ["drought", "droughts", "water scarcity", "water shortage"]) and any(kw in text for kw in ["water", "aquatic", "river", "lake", "ecosystem", "sustainability"]):
+        return "drought"
+    
+    return "other"
+
+
+def estimate_read_time(text: str) -> str:
+    words = len(text.split())
+    minutes = max(1, round(words / 200))
+    return f"{minutes} min read"
+
+
+def fetch_news_articles():
+    now = datetime.utcnow()
+    cached_at = news_cache["timestamp"]
+    if cached_at and now - cached_at < CACHE_TTL:
+        return news_cache["articles"]
+
+    api_key = current_app.config.get("NEWS_API_KEY", "")
+    if not api_key:
+        return []
+
+    params = {
+        "q": NEWS_QUERY,
+        "qInTitle": NEWS_QUERY,
+        "language": "en",
+        "pageSize": 40,
+        "sortBy": "publishedAt",
+        "apiKey": api_key,
+    }
+    url = "https://newsapi.org/v2/everything?" + urllib.parse.urlencode(params)
+
+    try:
+        response = requests.get(url, timeout=15, verify=certifi.where())
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        current_app.logger.error("News API fetch failed: %s", exc)
+        return []
+
+    if data.get("status") != "ok":
+        current_app.logger.warning("News API returned non-ok status: %s", data)
+        return []
+
+    articles = []
+    for article in data.get("articles", []):
+        title = article.get("title") or "Untitled"
+        description = article.get("description") or ""
+        content = article.get("content") or ""
+        source_name = article.get("source", {}).get("name", "Unknown Source")
+        category = categorize_article(title, description, content)
+        if category == "other":
+            continue
+        excerpt = description or content[:180].rsplit(" ", 1)[0] + "..."
+        published_at = article.get("publishedAt") or datetime.utcnow().isoformat()
+        read_time = estimate_read_time(description or content)
+
+        articles.append({
+            "title": title,
+            "excerpt": excerpt,
+            "source": source_name,
+            "date": published_at,
+            "url": article.get("url", "#"),
+            "read_time": read_time,
+            "category": category,
+        })
+
+    news_cache["timestamp"] = now
+    news_cache["articles"] = articles
+    return articles
+
+
+@bp.route("/news", methods=["GET"])
+def get_news():
+    """Return a small curated news feed for coral reefs, flooding, and droughts."""
+    articles = fetch_news_articles()
+    return jsonify({"articles": articles})
 
 
 @bp.route("/flood-risk", methods=["POST"])
