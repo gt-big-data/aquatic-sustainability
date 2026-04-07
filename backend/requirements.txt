@@ -20,3 +20,4 @@ earthaccess
 redis
 rq
 scikit-learn
+newsapi-python
