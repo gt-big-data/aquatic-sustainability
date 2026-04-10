@@ -161,7 +161,6 @@ html:not(.light) .logo {
     background: var(--panel-2);
 }
 
-
 /* Layout containers */
 .container.narrow {
     max-width: 980px;
@@ -298,6 +297,75 @@ select, input[type="range"], input[type="text"], input[type="number"] {
     margin-top: 10px;
 }
 
+/* ===== DARK MODE TOGGLE ===== */
+
+#darkmode-toggle {
+  width: 0;
+  height: 0;
+  visibility: hidden;
+}
+
+.darkmode-label {
+  width: 60px;
+  height: 28px;
+  position: relative;
+  display: inline-block;
+  background: #ebebeb;
+  border-radius: 50px;
+  cursor: pointer;
+  margin-left: 0px;
+  margin-right: 15px;
+  vertical-align: middle;
+}
+
+.darkmode-label:after {
+  content: "";
+  width: 24px;
+  height: 24px;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: linear-gradient(180deg,#ffcc89,#d8860b);
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+/* Checked state */
+#darkmode-toggle:checked + .darkmode-label {
+  background: #242424;
+}
+
+#darkmode-toggle:checked + .darkmode-label:after {
+  left: 58px;
+  transform: translateX(-100%);
+  background: linear-gradient(180deg,#777,#3a3a3a);
+}
+
+/* Icons */
+.darkmode-label svg {
+  position: absolute;
+  width: 13px;
+  top: 8px;
+  z-index: 2;
+}
+
+.darkmode-label .sun {
+  left: 6px;
+  fill: white;
+}
+
+.darkmode-label .moon {
+  right: 6px;
+  fill: gray;
+}
+
+#darkmode-toggle:checked + .darkmode-label .sun {
+  fill: gray;
+}
+
+#darkmode-toggle:checked + .darkmode-label .moon {
+  fill: white;
+}
 
 /* Text */
 .lead {

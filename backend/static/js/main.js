@@ -5,13 +5,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// Theme toggle (persist in localStorage)
 	const root = document.documentElement;
-	const themeToggle = document.getElementById('themeToggle');
+	const themeToggle = document.getElementById('darkmode-toggle');
 	const saved = localStorage.getItem('theme');
-	if (saved === 'light') root.classList.add('light');
 	if (themeToggle) {
-		themeToggle.addEventListener('click', () => {
-			root.classList.toggle('light');
-			localStorage.setItem('theme', root.classList.contains('light') ? 'light' : 'dark');
+		if (saved === 'light') {
+			root.classList.add('light');
+			themeToggle.checked = false;
+		} else {
+			themeToggle.checked = true;
+		}
+
+		themeToggle.addEventListener('change', () => {
+			if (themeToggle.checked) {
+				root.classList.remove('light'); // dark mode
+				localStorage.setItem('theme', 'dark');
+			} else {
+				root.classList.add('light'); // light mode
+				localStorage.setItem('theme', 'light');
+			}
 		});
 	}
 
