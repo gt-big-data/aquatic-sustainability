@@ -571,7 +571,7 @@
   }
 
     async function requestFloodRisk(centerLat, centerLon, options = {}) {
-      const { append = false, sourceName = 'Searched location', silent = false } = options;
+      const { append = false, sourceName = 'Searched location', silent = false, isPreloaded = false } = options;
       try {
         const resp = await fetch('/api/flood-risk', {
           method: 'POST',
@@ -597,7 +597,7 @@
           return;
         }
 
-        renderFloodPointsOnMap(data.result, { append, sourceName, radius: 35000 });
+        renderFloodPointsOnMap(data.result, { append, sourceName, radius: 35000, isPreloaded });
       } catch (err) {
         console.error('Network or parsing error calling /api/flood-risk', err);
         if (!silent) {
@@ -735,7 +735,7 @@
         }
         const data = await resp.json();
         if (data.result) {
-          renderFloodPointsOnMap(data.result, { append: true, sourceName: location.name, radius: 60000 });
+          renderFloodPointsOnMap(data.result, { append: true, sourceName: location.name, radius: 60000, isPreloaded: true });
           applyFilters();
         }
       } catch (err) {
@@ -782,8 +782,56 @@
       }
     }
 
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const toRad = (d) => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function findMatchingPreloadedCircle(lat, lng, maxDistanceKm = 40) {
+      for (const circle of modelCircles) {
+        if (!circle._isPreloaded) continue;
+        const center = circle.getCenter();
+        if (!center) continue;
+        const distKm = haversineKm(lat, lng, center.lat(), center.lng());
+        if (distKm <= maxDistanceKm) {
+          return circle;
+        }
+      }
+      return null;
+    }
+
+    function focusExistingPreloadedCircle(lat, lng) {
+      const match = findMatchingPreloadedCircle(lat, lng, 40);
+      if (!match) return false;
+
+      const center = match.getCenter();
+      map.setCenter(center);
+      map.setZoom(8);
+
+      if (activeInfoWindow) {
+        activeInfoWindow.close();
+        activeInfoWindow = null;
+      }
+
+      if (match._infoWindow) {
+        match._infoWindow.setPosition(center);
+        match._infoWindow.open(map);
+        activeInfoWindow = match._infoWindow;
+      }
+
+      return true;
+    }
+
     function renderFloodPointsOnMap(result, options = {}) {
-      const { append = false, sourceName = 'Searched location', radius = 60000 } = options;
+      const { append = false, sourceName = 'Searched location', radius = 60000, isPreloaded = false } = options;
       // Remove existing circles
       if (!append) {
         modelCircles.forEach(c => c.setMap(null));
@@ -868,6 +916,7 @@
       circle._prob = probPct;
       circle._risk = risk;
       circle._sourceName = sourceName;
+      circle._isPreloaded = isPreloaded;
 
       const infoContent = `
         <div style="
@@ -923,6 +972,7 @@
       `;
 
       const info = new google.maps.InfoWindow({ content: infoContent });
+      circle._infoWindow = info;
 
       circle.addListener('click', (e) => {
         if (activeInfoWindow) activeInfoWindow.close();
@@ -1230,6 +1280,9 @@
         const loc = autocompletePlace.geometry.location;
         const lat = loc.lat();
         const lng = loc.lng();
+        if (focusExistingPreloadedCircle(lat, lng)) {
+          return;
+        }
         map.setCenter(loc);
         map.setZoom(8);
         requestFloodRisk(lat, lng, { append: true, sourceName: query });
@@ -1241,6 +1294,9 @@
           const loc = results[0].geometry.location;
           const lat = loc.lat();
           const lng = loc.lng();
+          if (focusExistingPreloadedCircle(lat, lng)) {
+            return;
+          }
           map.setCenter(loc);
           map.setZoom(8);
           requestFloodRisk(lat, lng, { append: true, sourceName: query });
