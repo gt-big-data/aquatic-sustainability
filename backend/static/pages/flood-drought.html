@@ -397,28 +397,7 @@
 </style>
 </head>
 <body>
-<header class="site-header">
-<a class="brand" href="../">
-<img src="/static/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
-<span class="brand-title">Aquatic Sustainability</span>
-</a>
-<nav class="top-nav">
-  <a href="/about">Our Team</a>
-<a class="active" href="/flood-drought">Flood/Drought</a>
-<a href="/oil-spill">Oil Spill</a>
-<input type="checkbox" id="darkmode-toggle"/>
-        <label for="darkmode-toggle" class="darkmode-label">
-        <svg class="sun" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="5"/>
-        </svg>
-
-        <svg class="moon" viewBox="0 0 28 24">
-            <path d="M12 2a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/>
-        </svg>
-        </label>
-<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
-</nav>
-</header>
+<div data-navbar-root></div>
 
 <main class="workspace">
 <section class="map-panel">
@@ -1218,6 +1197,7 @@
 
 </script>
 
+<script src="/static/js/components/navbar.js" defer></script>
 <script src="/static/js/main.js" defer></script>
 <script src="/static/js/pages/floodDrought.js" defer></script>
 </body>

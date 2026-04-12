@@ -1,5 +1,4 @@
-// Year in footer
-document.addEventListener('DOMContentLoaded', () => {
+function initSharedUi() {
 	const yearEl = document.getElementById('year');
 	if (yearEl) yearEl.textContent = new Date().getFullYear();
 
@@ -15,25 +14,35 @@ document.addEventListener('DOMContentLoaded', () => {
 			themeToggle.checked = true;
 		}
 
-		themeToggle.addEventListener('change', () => {
-			if (themeToggle.checked) {
-				root.classList.remove('light'); // dark mode
-				localStorage.setItem('theme', 'dark');
-			} else {
-				root.classList.add('light'); // light mode
-				localStorage.setItem('theme', 'light');
-			}
-		});
+		if (themeToggle.dataset.bound !== 'true') {
+			themeToggle.addEventListener('change', () => {
+				if (themeToggle.checked) {
+					root.classList.remove('light'); // dark mode
+					localStorage.setItem('theme', 'dark');
+				} else {
+					root.classList.add('light'); // light mode
+					localStorage.setItem('theme', 'light');
+				}
+			});
+			themeToggle.dataset.bound = 'true';
+		}
 	}
 
 	// Logout button logic (add to all protected pages)
 	const logoutBtn = document.getElementById('logoutBtn');
-	if (logoutBtn) {
+	if (logoutBtn && logoutBtn.dataset.bound !== 'true') {
 		logoutBtn.addEventListener('click', () => {
 			localStorage.removeItem('access_token');
 			window.location.href = '/login';
 		});
+		logoutBtn.dataset.bound = 'true';
 	}
+
+}
+
+// Year in footer
+document.addEventListener('DOMContentLoaded', () => {
+	initSharedUi();
 
 	// Protect all pages except login/register
 	const isLogin = window.location.pathname.includes('/login');
@@ -52,3 +61,5 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 });
+
+window.initSharedUi = initSharedUi;
