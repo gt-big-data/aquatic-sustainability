@@ -11,3 +11,12 @@ backend/.env
 
 # Python virtual environment
 venv/
+
+# Generated docs
+coral-reef-model/docs/
+
+# Large satellite data files
+*.nc
+
+# Python cache
+__pycache__/
