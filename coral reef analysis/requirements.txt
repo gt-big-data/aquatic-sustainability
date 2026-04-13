@@ -1,0 +1,12 @@
+torch
+numpy
+scikit-learn
+pandas
+xarray
+requests
+beautifulsoup4
+matplotlib
+seaborn
+netCDF4
+h5netcdf
+dask

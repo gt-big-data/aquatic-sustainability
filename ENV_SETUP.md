@@ -34,6 +34,7 @@ gcloud builds submit --config cloudbuild.yaml \
    - Add the following variables:
      - `SECRET_KEY` = your secret key
      - `GOOGLE_MAPS_API_KEY` = your Google Maps API key
+     - `NEWS_API_KEY` = your News API key for article search
      - `SUPABASE_URL` = your Supabase project URL
      - `SUPABASE_ANON_KEY` = your Supabase anonymous key
      - `MONGODB_URI` = your MongoDB connection string (if using)
