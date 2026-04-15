@@ -8,14 +8,14 @@
     "lon_max": 154.0
   },
   "dbscan": {
-    "eps_km": 60.0,
+    "eps_km": 20.0,
     "min_samples": 2
   },
   "counts": {
     "rows_global": 41361,
     "rows_gbr": 2172,
-    "clusters": 8,
-    "clustered_records": 2171,
-    "noise_records": 1
+    "clusters": 34,
+    "clustered_records": 2157,
+    "noise_records": 15
   }
 }
