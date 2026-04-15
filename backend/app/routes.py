@@ -46,6 +46,62 @@ def estimate_read_time(text: str) -> str:
     minutes = max(1, round(words / 200))
     return f"{minutes} min read"
 
+PLACEHOLDER_ARTICLES = [
+    {
+        "title": "Nature: New Research on Coral Reef Ecosystems",
+        "excerpt": "Placeholder summary for a Nature article related to coral reef ecosystem trends and conservation outcomes.",
+        "source": "Nature",
+        "date": "2026-04-10T00:00:00Z",
+        "url": "https://www.nature.com/articles/s41559-026-03058-6",
+        "read_time": "8 min read",
+        "category": "coral",
+    },
+    {
+        "title": "NOAA: Restoring Seven Iconic Reefs in the Florida Keys",
+        "excerpt": "Placeholder summary for NOAA Fisheries updates on Mission: Recover Coral Reefs and restoration progress in the Florida Keys.",
+        "source": "NOAA Fisheries",
+        "date": "2026-04-08T00:00:00Z",
+        "url": "https://www.fisheries.noaa.gov/southeast/habitat-conservation/restoring-seven-iconic-reefs-mission-recover-coral-reefs-florida-keys",
+        "read_time": "6 min read",
+        "category": "coral",
+    },
+    {
+        "title": "Great Barrier Reef Foundation: Coral Bleaching Threats",
+        "excerpt": "Placeholder summary covering the major threats of coral bleaching to the Great Barrier Reef and what it means for marine biodiversity.",
+        "source": "Great Barrier Reef Foundation",
+        "date": "2026-04-07T00:00:00Z",
+        "url": "https://www.barrierreef.org/the-reef/threats/coral-bleaching",
+        "read_time": "5 min read",
+        "category": "coral",
+    },
+    {
+        "title": "Drought Pressure Mounts for Western NC Farmers as Planting Season Begins",
+        "excerpt": "Placeholder summary on severe and extreme drought conditions affecting farmers in Henderson County, North Carolina amid a significant rainfall deficit heading into the 2026 planting season.",
+        "source": "News Channel 9",
+        "date": "2026-04-10T00:00:00Z",
+        "url": "https://newschannel9.com/news/local/drought-pressure-severe-extreme-western-north-carolina-farmers-planting-season-begins-april-2026-crops-farms-henderson-county-rainfall-deficit",
+        "read_time": "4 min read",
+        "category": "drought",
+    },
+    {
+        "title": "Georgia Drought Worsens as Farmers and Waterways Feel the Strain",
+        "excerpt": "Placeholder summary on worsening drought conditions across Georgia, with farmers and local waterways experiencing increasing stress as water levels continue to drop.",
+        "source": "WCTV",
+        "date": "2026-04-10T00:00:00Z",
+        "url": "https://www.wctv.tv/2026/04/10/georgia-drought-worsens-farmers-waterways-feel-strain/",
+        "read_time": "4 min read",
+        "category": "drought",
+    },
+    {
+        "title": "The West's Snow Drought Meant Record Dryness — But Also Record Flooding",
+        "excerpt": "Placeholder summary on how the Western United States' severe snow drought led to both record dry conditions and paradoxical record flooding events across the region.",
+        "source": "High Country News",
+        "date": "2026-04-06T00:00:00Z",
+        "url": "https://www.hcn.org/articles/the-wests-snow-drought-meant-record-dryness-but-also-record-flooding/",
+        "read_time": "6 min read",
+        "category": "drought",
+    },
+]
 
 def fetch_news_articles():
     now = datetime.utcnow()
@@ -55,7 +111,7 @@ def fetch_news_articles():
 
     api_key = current_app.config.get("NEWS_API_KEY", "")
     if not api_key:
-        return []
+        return PLACEHOLDER_ARTICLES
 
     params = {
         "q": NEWS_QUERY,
@@ -103,7 +159,7 @@ def fetch_news_articles():
         })
 
     news_cache["timestamp"] = now
-    news_cache["articles"] = articles
+    news_cache["articles"] = PLACEHOLDER_ARTICLES + articles
     return articles
 
 
