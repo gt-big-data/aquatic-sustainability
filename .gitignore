@@ -10,5 +10,9 @@ backend/gpm_temp/
 .env
 backend/.env
 
+# Large dataset files
+crw_gbr_sequences_reduced_16.npz
+crw_gbr_nc_yearly
+
 # Python virtual environment
 venv/
