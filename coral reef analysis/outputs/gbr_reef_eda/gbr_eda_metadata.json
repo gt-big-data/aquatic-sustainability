@@ -1,0 +1,21 @@
+{
+  "input_csv": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/datasets/global_bleaching_environmental.csv",
+  "output_dir": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/gbr_reef_eda",
+  "bbox": {
+    "lat_min": -24.5,
+    "lat_max": -10.0,
+    "lon_min": 142.0,
+    "lon_max": 154.0
+  },
+  "dbscan": {
+    "eps_km": 10.0,
+    "min_samples": 2
+  },
+  "counts": {
+    "rows_global": 41361,
+    "rows_gbr": 2172,
+    "clusters": 133,
+    "clustered_records": 2117,
+    "noise_records": 55
+  }
+}

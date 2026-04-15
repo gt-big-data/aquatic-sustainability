@@ -440,6 +440,8 @@ def train(
     all_preds = []
     all_labels = []
     all_attn = []
+    all_probs = []
+    all_logits = []
     
     with torch.no_grad():
         for x_seq, x_static, labels in test_loader:
@@ -447,15 +449,20 @@ def train(
             x_static = x_static.to(DEVICE)
             
             logits, attn_weights = model(x_seq, x_static)
+            probs = torch.softmax(logits, dim=1).cpu().numpy()
             preds = logits.argmax(1).cpu().numpy()
             
             all_preds.extend(preds)
             all_labels.extend(labels.numpy())
             all_attn.append(attn_weights.cpu().numpy())
+            all_probs.append(probs)
+            all_logits.append(logits.cpu().numpy())
     
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
     all_attn = np.concatenate(all_attn, axis=0)
+    all_probs = np.concatenate(all_probs, axis=0)
+    all_logits = np.concatenate(all_logits, axis=0)
     
     class_names = class_names_for(n_classes)
     label_order = list(range(n_classes))
@@ -493,6 +500,9 @@ def train(
         predictions=all_preds,
         labels=all_labels,
         attention_weights=all_attn,
+        probabilities=all_probs,
+        logits=all_logits,
+        class_names=np.array(class_names, dtype=object),
         history_train_loss=history["train_loss"],
         history_val_loss=history["val_loss"],
         history_val_acc=history["val_acc"],
