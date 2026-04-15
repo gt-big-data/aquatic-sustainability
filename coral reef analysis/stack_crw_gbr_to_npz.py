@@ -8,6 +8,7 @@ Output keys:
        [FilledSST, TSA, TSA_DHW, TSA_Frequency]
   - y: (N,) placeholder labels (-1, unlabeled inference data)
   - meta: (N, 4) -> [lat, lon, year, month] for sequence end week
+  - end_time: (N,) exact sequence end timestamp (weekly)
   - feature_names
   - bleach_bins
 
@@ -263,6 +264,7 @@ def main() -> None:
     X = np.empty((N, lookback, F), dtype=np.float32)
     y = np.full((N,), -1, dtype=np.int32)  # unlabeled inference data
     meta = np.empty((N, 4), dtype=np.float32)
+    end_time = np.empty((N,), dtype="datetime64[ns]")
 
     cursor = 0
     for end_idx in range(lookback - 1, T):
@@ -279,6 +281,7 @@ def main() -> None:
         meta[cursor:next_cursor, 1] = site_lon
         meta[cursor:next_cursor, 2] = year
         meta[cursor:next_cursor, 3] = month
+        end_time[cursor:next_cursor] = np.datetime64(times[end_idx], "ns")
         cursor = next_cursor
 
         w = end_idx - (lookback - 1) + 1
@@ -291,6 +294,7 @@ def main() -> None:
         X=X,
         y=y,
         meta=meta,
+        end_time=end_time,
         feature_names=np.array(TARGET_FEATURES, dtype=object),
         bleach_bins=bleach_bins,
     )
@@ -302,6 +306,7 @@ def main() -> None:
     print(f"X shape: {X.shape}")
     print(f"y shape: {y.shape} (all -1 for unlabeled data)")
     print(f"meta shape: {meta.shape}")
+    print(f"end_time shape: {end_time.shape}")
     print(f"feature_names: {TARGET_FEATURES}")
 
 
