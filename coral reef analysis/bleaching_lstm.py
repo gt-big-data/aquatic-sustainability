@@ -236,7 +236,7 @@ def normalize_static(meta_train, meta_val, meta_test):
     meta_val_norm[:, :2] = (meta_val[:, :2] - mean) / std
     meta_test_norm[:, :2] = (meta_test[:, :2] - mean) / std
     
-    return meta_train_norm, meta_val_norm, meta_test_norm
+    return meta_train_norm, meta_val_norm, meta_test_norm, mean, std
 
 # ──────────────────────────────────────────────────────────────
 # FOCAL LOSS
@@ -248,9 +248,18 @@ class FocalLoss(nn.Module):
         self.alpha = alpha  # class weights tensor
 
     def forward(self, logits, targets):
-        ce_loss = F.cross_entropy(logits, targets, weight=self.alpha, reduction='none')
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+        # Compute p_t from unweighted log-probs; class weighting is applied once
+        # as alpha_t to avoid distorting p_t (and over-amplifying imbalance).
+        log_probs = F.log_softmax(logits, dim=1)
+        log_pt = log_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+        pt = log_pt.exp()
+
+        if self.alpha is not None:
+            alpha_t = self.alpha.gather(0, targets)
+        else:
+            alpha_t = 1.0
+
+        focal_loss = -alpha_t * ((1 - pt) ** self.gamma) * log_pt
         return focal_loss.mean()
 
 
@@ -265,6 +274,8 @@ def train(
     lr=LR,
     weight_decay=WEIGHT_DECAY,
     patience=PATIENCE,
+    loss_name="ce",
+    focal_gamma=2.0,
     num_workers=0,
 ):
     output_dir = Path(output_dir).resolve()
@@ -272,6 +283,7 @@ def train(
     data_path = Path(data_path).resolve()
     best_model_path = output_dir / "best_model.pt"
     results_path = output_dir / "results.npz"
+    stats_path = output_dir / "normalization_stats.npz"
 
     if not data_path.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
@@ -284,6 +296,8 @@ def train(
     print(f"  Output dir: {output_dir}")
     data = np.load(data_path)
     X, y, meta = data["X"], data["y"], data["meta"]
+    label_values = np.unique(y)
+    bleach_bins = data["bleach_bins"] if "bleach_bins" in data.files else None
     if X.ndim != 3:
         raise ValueError(f"Expected X to have shape (N, seq_len, n_features), got {X.shape}")
     if meta.ndim != 2 or meta.shape[1] < 2:
@@ -293,6 +307,9 @@ def train(
     n_features = int(X.shape[2])
     n_classes = int(np.max(y)) + 1
     print(f"  X: {X.shape}, y: {y.shape}, meta: {meta.shape}")
+    print(f"  Label values: {label_values.tolist()}")
+    if bleach_bins is not None:
+        print(f"  Bleach bins: {np.asarray(bleach_bins).tolist()}")
     print(f"  Inferred seq_len={seq_len}, n_features={n_features}, n_classes={n_classes}")
     print(f"  Device: {DEVICE}")
     
@@ -309,7 +326,11 @@ def train(
     
     # Normalize
     X_train, X_val, X_test, feat_mean, feat_std = normalize_features(X_train, X_val, X_test)
-    m_train, m_val, m_test = normalize_static(m_train, m_val, m_test)
+    m_train, m_val, m_test, static_mean, static_std = normalize_static(m_train, m_val, m_test)
+    feat_mean = feat_mean.astype(np.float32, copy=False)
+    feat_std = feat_std.astype(np.float32, copy=False)
+    static_mean = static_mean.astype(np.float32, copy=False)
+    static_std = static_std.astype(np.float32, copy=False)
     
     # Datasets and loaders
     train_ds = BleachingDataset(X_train, y_train, m_train)
@@ -318,7 +339,7 @@ def train(
     
     # sampler = get_weighted_sampler(y_train)
     # train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     
@@ -330,8 +351,14 @@ def train(
     
     # Loss and optimizer
     class_weights = get_class_weights(y_train, n_classes=n_classes)
-    # criterion = nn.CrossEntropyLoss(weight=class_weights)
-    criterion = FocalLoss(alpha=class_weights, gamma=2.0)
+    print(f"  Class weights: {class_weights.detach().cpu().numpy().tolist()}")
+    if loss_name == "ce":
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
+    elif loss_name == "focal":
+        criterion = FocalLoss(alpha=class_weights, gamma=focal_gamma)
+    else:
+        raise ValueError(f"Unsupported loss_name: {loss_name}")
+    print(f"  Loss: {loss_name} (focal_gamma={focal_gamma})")
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     
@@ -508,9 +535,19 @@ def train(
         history_val_acc=history["val_acc"],
         feat_mean=feat_mean,
         feat_std=feat_std,
+        static_mean=static_mean,
+        static_std=static_std,
+    )
+    np.savez_compressed(
+        stats_path,
+        feat_mean=feat_mean,
+        feat_std=feat_std,
+        static_mean=static_mean,
+        static_std=static_std,
     )
     print(f"\n  Results saved to {results_path}")
     print(f"  Best model saved to {best_model_path}")
+    print(f"  Normalization stats saved to {stats_path}")
 
 
 def parse_args():
@@ -531,6 +568,18 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY)
     parser.add_argument("--patience", type=int, default=PATIENCE)
     parser.add_argument(
+        "--loss",
+        choices=["ce", "focal"],
+        default="focal",
+        help="Training loss (default: focal).",
+    )
+    parser.add_argument(
+        "--focal-gamma",
+        type=float,
+        default=2.0,
+        help="Gamma parameter for focal loss (default: 2.0).",
+    )
+    parser.add_argument(
         "--num-workers",
         type=int,
         default=max(0, int(os.environ.get("SLURM_CPUS_PER_TASK", "1")) - 1),
@@ -549,5 +598,7 @@ if __name__ == "__main__":
         lr=args.lr,
         weight_decay=args.weight_decay,
         patience=args.patience,
+        loss_name=args.loss,
+        focal_gamma=args.focal_gamma,
         num_workers=args.num_workers,
     )

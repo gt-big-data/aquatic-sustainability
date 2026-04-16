@@ -120,8 +120,9 @@ def parse_args() -> argparse.Namespace:
         "--stats-path",
         default="",
         help=(
-            "Optional NPZ containing feat_mean/feat_std (and optionally static_mean/static_std). "
-            "If omitted or incompatible, normalization is estimated from inference data."
+            "Optional NPZ containing feat_mean/feat_std/static_mean/static_std. "
+            "If omitted, auto-detects <checkpoint_dir>/normalization_stats.npz "
+            "then <checkpoint_dir>/results.npz."
         ),
     )
     parser.add_argument(
@@ -221,45 +222,57 @@ def load_state_dict_compat(checkpoint_path: Path, device: torch.device) -> dict[
         return torch.load(checkpoint_path, map_location=device)
 
 
-def resolve_feature_stats(X: np.ndarray, stats_path: str) -> tuple[np.ndarray, np.ndarray, str]:
+def resolve_stats_path(stats_path: str, checkpoint_path: Path) -> Path:
     if stats_path:
         p = Path(stats_path).resolve()
+        if not p.exists():
+            raise FileNotFoundError(f"Stats file not found: {p}")
+        return p
+
+    candidates = [
+        checkpoint_path.parent / "normalization_stats.npz",
+        checkpoint_path.parent / "results.npz",
+    ]
+    for p in candidates:
         if p.exists():
-            d = np.load(p, allow_pickle=True)
-            if "feat_mean" in d.files and "feat_std" in d.files:
-                mean = d["feat_mean"]
-                std = d["feat_std"]
-                if mean.shape[0] == X.shape[-1] and std.shape[0] == X.shape[-1]:
-                    std = std.copy()
-                    std[std == 0] = 1.0
-                    return mean, std, f"stats file ({p})"
-                print(
-                    f"[warn] feat stats shape mismatch in {p}: "
-                    f"mean {mean.shape}, std {std.shape}, expected ({X.shape[-1]},)"
-                )
-    mean = X.reshape(-1, X.shape[-1]).mean(axis=0)
-    std = X.reshape(-1, X.shape[-1]).std(axis=0)
-    std[std == 0] = 1.0
-    return mean, std, "inference-data estimated"
+            return p.resolve()
+
+    raise FileNotFoundError(
+        "Normalization stats not found. Provide --stats-path or place "
+        "'normalization_stats.npz' next to the checkpoint."
+    )
 
 
-def resolve_static_stats(meta: np.ndarray, stats_path: str) -> tuple[np.ndarray, np.ndarray, str]:
-    if stats_path:
-        p = Path(stats_path).resolve()
-        if p.exists():
-            d = np.load(p, allow_pickle=True)
-            if "static_mean" in d.files and "static_std" in d.files:
-                mean = d["static_mean"]
-                std = d["static_std"]
-                if mean.shape[0] >= 2 and std.shape[0] >= 2:
-                    mean2 = mean[:2].astype(np.float32, copy=False)
-                    std2 = std[:2].astype(np.float32, copy=False)
-                    std2[std2 == 0] = 1.0
-                    return mean2, std2, f"stats file ({p})"
-    mean = meta[:, :2].mean(axis=0)
-    std = meta[:, :2].std(axis=0)
-    std[std == 0] = 1.0
-    return mean, std, "inference-data estimated"
+def load_normalization_stats(
+    stats_file: Path, n_features: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
+    with np.load(stats_file, allow_pickle=True) as d:
+        required = ["feat_mean", "feat_std", "static_mean", "static_std"]
+        missing = [k for k in required if k not in d.files]
+        if missing:
+            raise KeyError(f"Stats file missing required keys {missing}: {stats_file}")
+
+        feat_mean = np.asarray(d["feat_mean"], dtype=np.float32).reshape(-1)
+        feat_std = np.asarray(d["feat_std"], dtype=np.float32).reshape(-1)
+        static_mean = np.asarray(d["static_mean"], dtype=np.float32).reshape(-1)
+        static_std = np.asarray(d["static_std"], dtype=np.float32).reshape(-1)
+
+    if feat_mean.shape[0] != n_features or feat_std.shape[0] != n_features:
+        raise ValueError(
+            f"Feature stats shape mismatch in {stats_file}: "
+            f"feat_mean={feat_mean.shape}, feat_std={feat_std.shape}, expected=({n_features},)"
+        )
+    if static_mean.shape[0] < 2 or static_std.shape[0] < 2:
+        raise ValueError(
+            f"Static stats shape mismatch in {stats_file}: "
+            f"static_mean={static_mean.shape}, static_std={static_std.shape}, expected at least (2,)"
+        )
+
+    feat_std = feat_std.copy()
+    static_std = static_std.copy()
+    feat_std[feat_std == 0] = 1.0
+    static_std[static_std == 0] = 1.0
+    return feat_mean, feat_std, static_mean[:2], static_std[:2], f"stats file ({stats_file})"
 
 
 def main() -> None:
@@ -295,8 +308,10 @@ def main() -> None:
             f"but input X has {X.shape[2]}."
         )
 
-    feat_mean, feat_std, feat_src = resolve_feature_stats(X, args.stats_path)
-    static_mean, static_std, static_src = resolve_static_stats(meta, args.stats_path)
+    stats_file = resolve_stats_path(args.stats_path, ckpt_path)
+    feat_mean, feat_std, static_mean, static_std, stats_src = load_normalization_stats(
+        stats_file, X.shape[-1]
+    )
 
     X_norm = (X - feat_mean) / feat_std
     static = (meta[:, :2] - static_mean) / static_std
@@ -325,8 +340,8 @@ def main() -> None:
         f"bidirectional={cfg['bidirectional']}"
     )
     print(f"X shape: {X.shape}")
-    print(f"Feature normalization: {feat_src}")
-    print(f"Static normalization: {static_src}")
+    print(f"Feature normalization: {stats_src}")
+    print(f"Static normalization: {stats_src}")
     print(f"Device: {device}")
 
     logits_all = []
@@ -419,8 +434,8 @@ def main() -> None:
         "predicted_counts": {class_names[i]: int(counts[i]) for i in range(n_classes)},
         "predicted_percent": {class_names[i]: float(counts[i] / len(preds) * 100.0) for i in range(n_classes)},
         "location_source": loc_source,
-        "feature_norm_source": feat_src,
-        "static_norm_source": static_src,
+        "feature_norm_source": stats_src,
+        "static_norm_source": stats_src,
     }
     out_json = output_dir / "inference_summary.json"
     out_json.write_text(json.dumps(summary, indent=2))
