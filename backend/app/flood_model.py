@@ -11,6 +11,7 @@ import xarray as xr
 import earthaccess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
+import threading
 
 from . import redis_conn
 from app.global_smap_loader import build_global_smap_21days, SMAP_GLOBAL_NPY
@@ -59,6 +60,7 @@ GPM_GLOBAL_NPY = os.path.join(DATA_CACHE_DIR, "global_gpm_4days.npy")
 GLOBAL_SMAP = None
 GLOBAL_GPM = None
 GLOBAL_TIMESTAMP = None
+GLOBAL_DATA_LOCK = threading.Lock()
 
 # =====================================================================
 # MODEL ARCHITECTURE
@@ -287,7 +289,14 @@ def ensure_global_data_loaded():
     global GLOBAL_TIMESTAMP
     now = datetime.utcnow()
 
-    if GLOBAL_TIMESTAMP is None or (now - GLOBAL_TIMESTAMP).total_seconds() > 86400:
+    if GLOBAL_TIMESTAMP is not None and (now - GLOBAL_TIMESTAMP).total_seconds() <= 86400:
+        return
+
+    with GLOBAL_DATA_LOCK:
+        now = datetime.utcnow()
+        if GLOBAL_TIMESTAMP is not None and (now - GLOBAL_TIMESTAMP).total_seconds() <= 86400:
+            return
+
         print("[GLOBAL CACHE] Reloading global SMAP and GPM…")
         load_global_smap()
         load_global_gpm()
