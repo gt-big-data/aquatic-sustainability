@@ -616,109 +616,18 @@
     let minProb = 0;
     let maxProb = 100;
 
-    // Fixed global key locations fetched from the live model on page load.
-    const globalKeyLocations = [
-      // North America
-      { name: 'New York', lat: 40.7128, lon: -74.0060 },
-      { name: 'Miami', lat: 25.7617, lon: -80.1918 },
-      { name: 'Houston', lat: 29.7604, lon: -95.3698 },
-      { name: 'New Orleans', lat: 29.9511, lon: -90.0715 },
-      { name: 'Los Angeles', lat: 34.0522, lon: -118.2437 },
-      { name: 'San Francisco', lat: 37.7749, lon: -122.4194 },
-      { name: 'Seattle', lat: 47.6062, lon: -122.3321 },
-      { name: 'Mexico City', lat: 19.4326, lon: -99.1332 },
-      { name: 'Toronto', lat: 43.6532, lon: -79.3832 },
-      { name: 'Vancouver', lat: 49.2827, lon: -123.1207 },
-
-      // South America
-      { name: 'Bogota', lat: 4.7110, lon: -74.0721 },
-      { name: 'Lima', lat: -12.0464, lon: -77.0428 },
-      { name: 'Sao Paulo', lat: -23.5505, lon: -46.6333 },
-      { name: 'Rio de Janeiro', lat: -22.9068, lon: -43.1729 },
-      { name: 'Buenos Aires', lat: -34.6037, lon: -58.3816 },
-      { name: 'Santiago', lat: -33.4489, lon: -70.6693 },
-      { name: 'Quito', lat: -0.1807, lon: -78.4678 },
-      { name: 'Manaus', lat: -3.1190, lon: -60.0217 },
-
-      // Europe
-      { name: 'London', lat: 51.5074, lon: -0.1278 },
-      { name: 'Paris', lat: 48.8566, lon: 2.3522 },
-      { name: 'Amsterdam', lat: 52.3676, lon: 4.9041 },
-      { name: 'Berlin', lat: 52.5200, lon: 13.4050 },
-      { name: 'Madrid', lat: 40.4168, lon: -3.7038 },
-      { name: 'Lisbon', lat: 38.7223, lon: -9.1393 },
-      { name: 'Rome', lat: 41.9028, lon: 12.4964 },
-      { name: 'Athens', lat: 37.9838, lon: 23.7275 },
-      { name: 'Istanbul', lat: 41.0082, lon: 28.9784 },
-      { name: 'Stockholm', lat: 59.3293, lon: 18.0686 },
-
-      // Africa
-      { name: 'Cairo', lat: 30.0444, lon: 31.2357 },
-      { name: 'Lagos', lat: 6.5244, lon: 3.3792 },
-      { name: 'Accra', lat: 5.6037, lon: -0.1870 },
-      { name: 'Dakar', lat: 14.7167, lon: -17.4677 },
-      { name: 'Nairobi', lat: -1.2921, lon: 36.8219 },
-      { name: 'Addis Ababa', lat: 8.9806, lon: 38.7578 },
-      { name: 'Kinshasa', lat: -4.4419, lon: 15.2663 },
-      { name: 'Johannesburg', lat: -26.2041, lon: 28.0473 },
-      { name: 'Cape Town', lat: -33.9249, lon: 18.4241 },
-      { name: 'Casablanca', lat: 33.5731, lon: -7.5898 },
-
-      // Middle East
-      { name: 'Dubai', lat: 25.2048, lon: 55.2708 },
-      { name: 'Abu Dhabi', lat: 24.4539, lon: 54.3773 },
-      { name: 'Riyadh', lat: 24.7136, lon: 46.6753 },
-      { name: 'Jeddah', lat: 21.4858, lon: 39.1925 },
-      { name: 'Doha', lat: 25.2854, lon: 51.5310 },
-      { name: 'Kuwait City', lat: 29.3759, lon: 47.9774 },
-      { name: 'Muscat', lat: 23.5880, lon: 58.3829 },
-      { name: 'Tehran', lat: 35.6892, lon: 51.3890 },
-
-      // South Asia
-      { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
-      { name: 'Mumbai', lat: 19.0760, lon: 72.8777 },
-      { name: 'New Delhi', lat: 28.6139, lon: 77.2090 },
-      { name: 'Kolkata', lat: 22.5726, lon: 88.3639 },
-      { name: 'Dhaka', lat: 23.8103, lon: 90.4125 },
-      { name: 'Kathmandu', lat: 27.7172, lon: 85.3240 },
-      { name: 'Colombo', lat: 6.9271, lon: 79.8612 },
-
-      // Southeast Asia
-      { name: 'Bangkok', lat: 13.7563, lon: 100.5018 },
-      { name: 'Ho Chi Minh City', lat: 10.8231, lon: 106.6297 },
-      { name: 'Jakarta', lat: -6.2088, lon: 106.8456 },
-      { name: 'Manila', lat: 14.5995, lon: 120.9842 },
+    // Southeast Asian cities — the ONLY locations pre-loaded on page load.
+    const southeastAsianCities = [
+      { name: 'Bangkok, Thailand', lat: 13.7563, lon: 100.5018 },
+      { name: 'Ho Chi Minh City, Vietnam', lat: 10.8231, lon: 106.6297 },
+      { name: 'Jakarta, Indonesia', lat: -6.2088, lon: 106.8456 },
+      { name: 'Manila, Philippines', lat: 14.5995, lon: 120.9842 },
       { name: 'Singapore', lat: 1.3521, lon: 103.8198 },
-      { name: 'Kuala Lumpur', lat: 3.1390, lon: 101.6869 },
-      { name: 'Phnom Penh', lat: 11.5564, lon: 104.9282 },
-      { name: 'Yangon', lat: 16.8409, lon: 96.1735 },
-      { name: 'Vientiane', lat: 17.9757, lon: 102.6331 },
-      { name: 'Bandar Seri Begawan', lat: 4.9031, lon: 114.9398 },
-      { name: 'Surabaya', lat: -7.2575, lon: 112.7521 },
-      { name: 'Medan', lat: 3.5952, lon: 98.6722 },
-      { name: 'Davao', lat: 7.1907, lon: 125.4553 },
-      { name: 'Da Nang', lat: 16.0544, lon: 108.2022 },
-      { name: 'Chiang Mai', lat: 18.7883, lon: 98.9853 },
-
-      // East Asia
-      { name: 'Tokyo', lat: 35.6762, lon: 139.6503 },
-      { name: 'Osaka', lat: 34.6937, lon: 135.5023 },
-      { name: 'Seoul', lat: 37.5665, lon: 126.9780 },
-      { name: 'Busan', lat: 35.1796, lon: 129.0756 },
-      { name: 'Beijing', lat: 39.9042, lon: 116.4074 },
-      { name: 'Shanghai', lat: 31.2304, lon: 121.4737 },
-      { name: 'Guangzhou', lat: 23.1291, lon: 113.2644 },
-      { name: 'Hong Kong', lat: 22.3193, lon: 114.1694 },
-      { name: 'Taipei', lat: 25.0330, lon: 121.5654 },
-
-      // Oceania
-      { name: 'Sydney', lat: -33.8688, lon: 151.2093 },
-      { name: 'Melbourne', lat: -37.8136, lon: 144.9631 },
-      { name: 'Brisbane', lat: -27.4698, lon: 153.0251 },
-      { name: 'Perth', lat: -31.9523, lon: 115.8613 },
-      { name: 'Auckland', lat: -36.8509, lon: 174.7645 },
-      { name: 'Wellington', lat: -41.2865, lon: 174.7762 },
-      { name: 'Suva', lat: -18.1248, lon: 178.4501 },
+      { name: 'Kuala Lumpur, Malaysia', lat: 3.1390, lon: 101.6869 },
+      { name: 'Phnom Penh, Cambodia', lat: 11.5564, lon: 104.9282 },
+      { name: 'Yangon, Myanmar', lat: 16.8409, lon: 96.1735 },
+      { name: 'Hanoi, Vietnam', lat: 21.0285, lon: 105.8542 },
+      { name: 'Chiang Mai, Thailand', lat: 18.7883, lon: 98.9853 },
     ];
 
     // Fetch live model data for a single location and add its circles to the map.
@@ -745,21 +654,20 @@
       if (loadingEl) {
         const done = parseInt(loadingEl.dataset.done || '0') + 1;
         loadingEl.dataset.done = done;
-        const total = globalKeyLocations.length;
-        loadingEl.textContent = `Loading global flood risk… ${done}/${total}`;
+        const total = southeastAsianCities.length;
+        loadingEl.textContent = `Pre-loading Southeast Asia… ${done}/${total}`;
         if (done >= total) {
           setTimeout(() => loadingEl.remove(), 1500);
         }
       }
     }
 
-    // Load many global points in batches to avoid overloading the API.
+    // Pre-load Southeast Asian cities only (results cached in Redis across all users).
     async function loadRegionalFloodRisk() {
-      // Create a dismissible loading banner
       const banner = document.createElement('div');
       banner.id = 'regional-loading-banner';
       banner.dataset.done = '0';
-      banner.textContent = `Loading global flood risk… 0/${globalKeyLocations.length}`;
+      banner.textContent = `Pre-loading Southeast Asia… 0/${southeastAsianCities.length}`;
       Object.assign(banner.style, {
         position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
         background: 'rgba(0,0,0,0.75)', color: '#fff', padding: '8px 18px',
@@ -768,18 +676,19 @@
       });
       document.body.appendChild(banner);
 
-      // Process requests in fixed-size batches for better stability.
-      const BATCH_SIZE = 8;
-      for (let i = 0; i < globalKeyLocations.length; i += BATCH_SIZE) {
-        const chunk = globalKeyLocations.slice(i, i + BATCH_SIZE);
-        const promises = chunk.map(loc => fetchAndRenderLocation(loc, banner));
-        await Promise.allSettled(promises);
+      // Load 3 cities at a time to balance speed vs. server load.
+      const BATCH_SIZE = 3;
+      for (let i = 0; i < southeastAsianCities.length; i += BATCH_SIZE) {
+        const chunk = southeastAsianCities.slice(i, i + BATCH_SIZE);
+        await Promise.allSettled(chunk.map(loc => fetchAndRenderLocation(loc, banner)));
       }
 
+      banner.textContent = `Southeast Asia loaded!`;
       if (banner.parentNode) {
         banner.style.opacity = '0';
-        setTimeout(() => banner.remove(), 500);
+        setTimeout(() => banner.remove(), 2000);
       }
+      console.log('[PRELOAD] Southeast Asia pre-load complete. Results cached in Redis for all users.');
     }
 
     function haversineKm(lat1, lon1, lat2, lon2) {
