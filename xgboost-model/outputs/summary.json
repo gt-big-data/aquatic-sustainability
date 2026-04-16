@@ -1,0 +1,14 @@
+{
+  "baseline_val_macro_f1": 0.6694872848231195,
+  "tuned_val_macro_f1": 0.687825891976602,
+  "test_macro_f1": 0.6742575508446322,
+  "best_params": {
+    "subsample": 0.9,
+    "n_estimators": 500,
+    "min_child_weight": 3,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "gamma": 0.1,
+    "colsample_bytree": 0.7
+  }
+}
