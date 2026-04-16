@@ -121,20 +121,7 @@
 </style>
 </head>
 <body>
-<header class="site-header">
-<a class="brand" href="../">
-<img src="/static/assets/images/logo.svg" alt="Aquatic Sustainability logo" class="logo" />
-<span class="brand-title">Aquatic Sustainability</span>
-</a>
-<nav class="top-nav">
-  <a href="/about">Our Team</a>
-<a href="/flood-drought">Flood/Drought</a>
-<a class="active" href="/oil-spill">Oil Spill</a>
-<a href="/news">News</a>
-<button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌓</button>
-<button id="logoutBtn" class="btn btn-outline" style="float:right; margin-left:1em;">Logout</button>
-</nav>
-</header>
+<div data-navbar-root></div>
 
 <main class="workspace">
 <section class="map-panel">
@@ -519,6 +506,7 @@
 </main>
 
 <script src="/static/js/map.js" defer></script>
+<script src="/static/js/components/navbar.js" defer></script>
 <script src="/static/js/main.js" defer></script>
 <script src="/static/js/pages/oilSpill.js" defer></script>
 </body>

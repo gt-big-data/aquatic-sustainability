@@ -1,5 +1,6 @@
 import os
 import pickle
+import json
 from datetime import datetime, timedelta, date
 
 import numpy as np
@@ -559,10 +560,35 @@ def build_radial_locations(center_lat, center_lon):
 # INFERENCE ENTRYPOINT
 # =====================================================================
 
+# Cache TTL: results are valid for the rest of the UTC day (stale after midnight).
+_FLOOD_CACHE_TTL_SECONDS = 86400  # 24 h — refreshed each new day
+
+def _flood_cache_key(center_lat: float, center_lon: float) -> str:
+    """Redis key scoped to the UTC date so results auto-expire each day."""
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    # Round to 3 decimal places so trivially-different floats share a cache entry.
+    return f"flood_inference:{round(center_lat, 3)}:{round(center_lon, 3)}:{date_str}"
+
+
 def run_flood_inference(center_lat, center_lon):
     """
     Run the DualCNNLSTM model on a 56-point radial grid around (center_lat, center_lon).
+
+    Results are cached in Redis for the current UTC day so that repeated calls
+    (e.g. from the regional page-load loop) return instantly after the first run.
     """
+    # ── Try Redis cache first ────────────────────────────────────────────────
+    cache_key = _flood_cache_key(center_lat, center_lon)
+    if redis_conn is not None:
+        try:
+            cached = redis_conn.get(cache_key)
+            if cached:
+                print(f"[FLOOD CACHE] HIT {cache_key}")
+                return json.loads(cached)
+        except Exception as e:
+            print(f"[FLOOD CACHE] Redis read error (continuing without cache): {e}")
+
+    # ── Full model inference ─────────────────────────────────────────────────
     model, scaler = get_model_and_scaler()
     ensure_global_data_loaded()
 
@@ -611,7 +637,17 @@ def run_flood_inference(center_lat, center_lon):
             "risk": risk,
         })
 
-    return {
+    result = {
         "center": {"lat": center_lat, "lon": center_lon},
         "points": points,
     }
+
+    # ── Store in Redis cache ─────────────────────────────────────────────────
+    if redis_conn is not None:
+        try:
+            redis_conn.setex(cache_key, _FLOOD_CACHE_TTL_SECONDS, json.dumps(result))
+            print(f"[FLOOD CACHE] STORED {cache_key}")
+        except Exception as e:
+            print(f"[FLOOD CACHE] Redis write error (result not cached): {e}")
+
+    return result
