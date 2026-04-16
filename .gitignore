@@ -4,10 +4,15 @@ backend/data/
 backend/gpm_temp/
 *.npy
 *.HDF5
+*.pyc
 
 # Local config / secrets
 .env
 backend/.env
+
+# Large dataset files
+crw_gbr_sequences_reduced_16.npz
+crw_gbr_nc_yearly
 
 # Python virtual environment
 venv/

@@ -1,0 +1,17 @@
+{
+  "scheme": "4_ecological",
+  "edges": [
+    -1,
+    5,
+    30,
+    100
+  ],
+  "class_labels": [
+    "Healthy (0-5%)",
+    "Stressed (6-30%)",
+    "Severe (>30%)"
+  ],
+  "n_classes": 3,
+  "macro_f1": 0.7763782313421302,
+  "baseline_3class_f1": 0.7559391118793558
+}

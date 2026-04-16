@@ -570,40 +570,45 @@
   return true;
   }
 
-    async function requestFloodRisk(centerLat, centerLon) {
+    async function requestFloodRisk(centerLat, centerLon, options = {}) {
+      const { append = false, sourceName = 'Searched location', silent = false, isPreloaded = false } = options;
       try {
-        const resp = await fetch(
-          'https://aquatic-sustainability-834508815183.us-east1.run.app/api/flood-risk',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: centerLat, lon: centerLon }),
-          }
-        );
+        const resp = await fetch('/api/flood-risk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: centerLat, lon: centerLon }),
+        });
 
         const data = await resp.json();
 
         if (!resp.ok) {
           console.error('Error from flood-risk API', data);
-          alert('Error running flood model: ' + (data.error || 'unknown'));
+          if (!silent) {
+            alert('Error running flood model: ' + (data.error || 'unknown'));
+          }
           return;
         }
 
         if (!data.result) {
           console.error('Unexpected flood-risk response shape', data);
-          alert('Flood model returned no result.');
+          if (!silent) {
+            alert('Flood model returned no result.');
+          }
           return;
         }
 
-        renderFloodPointsOnMap(data.result);
+        renderFloodPointsOnMap(data.result, { append, sourceName, radius: 35000, isPreloaded });
       } catch (err) {
         console.error('Network or parsing error calling /api/flood-risk', err);
-        alert('Network error running flood model. Check console for details.');
+        if (!silent) {
+          alert('Network error running flood model. Check console for details.');
+        }
       }
     }
 
     let map;
     let modelCircles = [];
+    let activeInfoWindow = null;
     let floodPolygons = [];
     let droughtPolygons = [];
     let showFlood = true;
@@ -611,232 +616,378 @@
     let minProb = 0;
     let maxProb = 100;
 
-    function renderFloodPointsOnMap(result) {
+    // Fixed global key locations fetched from the live model on page load.
+    const globalKeyLocations = [
+      // North America
+      { name: 'New York', lat: 40.7128, lon: -74.0060 },
+      { name: 'Miami', lat: 25.7617, lon: -80.1918 },
+      { name: 'Houston', lat: 29.7604, lon: -95.3698 },
+      { name: 'New Orleans', lat: 29.9511, lon: -90.0715 },
+      { name: 'Los Angeles', lat: 34.0522, lon: -118.2437 },
+      { name: 'San Francisco', lat: 37.7749, lon: -122.4194 },
+      { name: 'Seattle', lat: 47.6062, lon: -122.3321 },
+      { name: 'Mexico City', lat: 19.4326, lon: -99.1332 },
+      { name: 'Toronto', lat: 43.6532, lon: -79.3832 },
+      { name: 'Vancouver', lat: 49.2827, lon: -123.1207 },
+
+      // South America
+      { name: 'Bogota', lat: 4.7110, lon: -74.0721 },
+      { name: 'Lima', lat: -12.0464, lon: -77.0428 },
+      { name: 'Sao Paulo', lat: -23.5505, lon: -46.6333 },
+      { name: 'Rio de Janeiro', lat: -22.9068, lon: -43.1729 },
+      { name: 'Buenos Aires', lat: -34.6037, lon: -58.3816 },
+      { name: 'Santiago', lat: -33.4489, lon: -70.6693 },
+      { name: 'Quito', lat: -0.1807, lon: -78.4678 },
+      { name: 'Manaus', lat: -3.1190, lon: -60.0217 },
+
+      // Europe
+      { name: 'London', lat: 51.5074, lon: -0.1278 },
+      { name: 'Paris', lat: 48.8566, lon: 2.3522 },
+      { name: 'Amsterdam', lat: 52.3676, lon: 4.9041 },
+      { name: 'Berlin', lat: 52.5200, lon: 13.4050 },
+      { name: 'Madrid', lat: 40.4168, lon: -3.7038 },
+      { name: 'Lisbon', lat: 38.7223, lon: -9.1393 },
+      { name: 'Rome', lat: 41.9028, lon: 12.4964 },
+      { name: 'Athens', lat: 37.9838, lon: 23.7275 },
+      { name: 'Istanbul', lat: 41.0082, lon: 28.9784 },
+      { name: 'Stockholm', lat: 59.3293, lon: 18.0686 },
+
+      // Africa
+      { name: 'Cairo', lat: 30.0444, lon: 31.2357 },
+      { name: 'Lagos', lat: 6.5244, lon: 3.3792 },
+      { name: 'Accra', lat: 5.6037, lon: -0.1870 },
+      { name: 'Dakar', lat: 14.7167, lon: -17.4677 },
+      { name: 'Nairobi', lat: -1.2921, lon: 36.8219 },
+      { name: 'Addis Ababa', lat: 8.9806, lon: 38.7578 },
+      { name: 'Kinshasa', lat: -4.4419, lon: 15.2663 },
+      { name: 'Johannesburg', lat: -26.2041, lon: 28.0473 },
+      { name: 'Cape Town', lat: -33.9249, lon: 18.4241 },
+      { name: 'Casablanca', lat: 33.5731, lon: -7.5898 },
+
+      // Middle East
+      { name: 'Dubai', lat: 25.2048, lon: 55.2708 },
+      { name: 'Abu Dhabi', lat: 24.4539, lon: 54.3773 },
+      { name: 'Riyadh', lat: 24.7136, lon: 46.6753 },
+      { name: 'Jeddah', lat: 21.4858, lon: 39.1925 },
+      { name: 'Doha', lat: 25.2854, lon: 51.5310 },
+      { name: 'Kuwait City', lat: 29.3759, lon: 47.9774 },
+      { name: 'Muscat', lat: 23.5880, lon: 58.3829 },
+      { name: 'Tehran', lat: 35.6892, lon: 51.3890 },
+
+      // South Asia
+      { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
+      { name: 'Mumbai', lat: 19.0760, lon: 72.8777 },
+      { name: 'New Delhi', lat: 28.6139, lon: 77.2090 },
+      { name: 'Kolkata', lat: 22.5726, lon: 88.3639 },
+      { name: 'Dhaka', lat: 23.8103, lon: 90.4125 },
+      { name: 'Kathmandu', lat: 27.7172, lon: 85.3240 },
+      { name: 'Colombo', lat: 6.9271, lon: 79.8612 },
+
+      // Southeast Asia
+      { name: 'Bangkok', lat: 13.7563, lon: 100.5018 },
+      { name: 'Ho Chi Minh City', lat: 10.8231, lon: 106.6297 },
+      { name: 'Jakarta', lat: -6.2088, lon: 106.8456 },
+      { name: 'Manila', lat: 14.5995, lon: 120.9842 },
+      { name: 'Singapore', lat: 1.3521, lon: 103.8198 },
+      { name: 'Kuala Lumpur', lat: 3.1390, lon: 101.6869 },
+      { name: 'Phnom Penh', lat: 11.5564, lon: 104.9282 },
+      { name: 'Yangon', lat: 16.8409, lon: 96.1735 },
+      { name: 'Vientiane', lat: 17.9757, lon: 102.6331 },
+      { name: 'Bandar Seri Begawan', lat: 4.9031, lon: 114.9398 },
+      { name: 'Surabaya', lat: -7.2575, lon: 112.7521 },
+      { name: 'Medan', lat: 3.5952, lon: 98.6722 },
+      { name: 'Davao', lat: 7.1907, lon: 125.4553 },
+      { name: 'Da Nang', lat: 16.0544, lon: 108.2022 },
+      { name: 'Chiang Mai', lat: 18.7883, lon: 98.9853 },
+
+      // East Asia
+      { name: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+      { name: 'Osaka', lat: 34.6937, lon: 135.5023 },
+      { name: 'Seoul', lat: 37.5665, lon: 126.9780 },
+      { name: 'Busan', lat: 35.1796, lon: 129.0756 },
+      { name: 'Beijing', lat: 39.9042, lon: 116.4074 },
+      { name: 'Shanghai', lat: 31.2304, lon: 121.4737 },
+      { name: 'Guangzhou', lat: 23.1291, lon: 113.2644 },
+      { name: 'Hong Kong', lat: 22.3193, lon: 114.1694 },
+      { name: 'Taipei', lat: 25.0330, lon: 121.5654 },
+
+      // Oceania
+      { name: 'Sydney', lat: -33.8688, lon: 151.2093 },
+      { name: 'Melbourne', lat: -37.8136, lon: 144.9631 },
+      { name: 'Brisbane', lat: -27.4698, lon: 153.0251 },
+      { name: 'Perth', lat: -31.9523, lon: 115.8613 },
+      { name: 'Auckland', lat: -36.8509, lon: 174.7645 },
+      { name: 'Wellington', lat: -41.2865, lon: 174.7762 },
+      { name: 'Suva', lat: -18.1248, lon: 178.4501 },
+    ];
+
+    // Fetch live model data for a single location and add its circles to the map.
+    async function fetchAndRenderLocation(location, loadingEl) {
+      try {
+        const resp = await fetch('/api/flood-risk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: location.lat, lon: location.lon }),
+        });
+        if (!resp.ok) {
+          console.warn(`[Regional] ${location.name}: HTTP ${resp.status}`);
+          return;
+        }
+        const data = await resp.json();
+        if (data.result) {
+          renderFloodPointsOnMap(data.result, { append: true, sourceName: location.name, radius: 60000, isPreloaded: true });
+          applyFilters();
+        }
+      } catch (err) {
+        console.warn(`[Regional] ${location.name}: ${err.message}`);
+      }
+      // Update progress counter
+      if (loadingEl) {
+        const done = parseInt(loadingEl.dataset.done || '0') + 1;
+        loadingEl.dataset.done = done;
+        const total = globalKeyLocations.length;
+        loadingEl.textContent = `Loading global flood risk… ${done}/${total}`;
+        if (done >= total) {
+          setTimeout(() => loadingEl.remove(), 1500);
+        }
+      }
+    }
+
+    // Load many global points in batches to avoid overloading the API.
+    async function loadRegionalFloodRisk() {
+      // Create a dismissible loading banner
+      const banner = document.createElement('div');
+      banner.id = 'regional-loading-banner';
+      banner.dataset.done = '0';
+      banner.textContent = `Loading global flood risk… 0/${globalKeyLocations.length}`;
+      Object.assign(banner.style, {
+        position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+        background: 'rgba(0,0,0,0.75)', color: '#fff', padding: '8px 18px',
+        borderRadius: '20px', fontSize: '13px', zIndex: '9999', pointerEvents: 'none',
+        transition: 'opacity 0.4s',
+      });
+      document.body.appendChild(banner);
+
+      // Process requests in fixed-size batches for better stability.
+      const BATCH_SIZE = 8;
+      for (let i = 0; i < globalKeyLocations.length; i += BATCH_SIZE) {
+        const chunk = globalKeyLocations.slice(i, i + BATCH_SIZE);
+        const promises = chunk.map(loc => fetchAndRenderLocation(loc, banner));
+        await Promise.allSettled(promises);
+      }
+
+      if (banner.parentNode) {
+        banner.style.opacity = '0';
+        setTimeout(() => banner.remove(), 500);
+      }
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const toRad = (d) => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function findMatchingPreloadedCircle(lat, lng, maxDistanceKm = 40) {
+      for (const circle of modelCircles) {
+        if (!circle._isPreloaded) continue;
+        const center = circle.getCenter();
+        if (!center) continue;
+        const distKm = haversineKm(lat, lng, center.lat(), center.lng());
+        if (distKm <= maxDistanceKm) {
+          return circle;
+        }
+      }
+      return null;
+    }
+
+    function focusExistingPreloadedCircle(lat, lng) {
+      const match = findMatchingPreloadedCircle(lat, lng, 40);
+      if (!match) return false;
+
+      const center = match.getCenter();
+      map.setCenter(center);
+      map.setZoom(8);
+
+      if (activeInfoWindow) {
+        activeInfoWindow.close();
+        activeInfoWindow = null;
+      }
+
+      if (match._infoWindow) {
+        match._infoWindow.setPosition(center);
+        match._infoWindow.open(map);
+        activeInfoWindow = match._infoWindow;
+      }
+
+      return true;
+    }
+
+    function renderFloodPointsOnMap(result, options = {}) {
+      const { append = false, sourceName = 'Searched location', radius = 60000, isPreloaded = false } = options;
       // Remove existing circles
-      modelCircles.forEach(c => c.setMap(null));
-      modelCircles = [];
+      if (!append) {
+        modelCircles.forEach(c => c.setMap(null));
+        modelCircles = [];
+      }
 
       if (!result || !Array.isArray(result.points)) {
         console.warn('renderFloodPointsOnMap: no points in result', result);
         return;
       }
 
-      // Center map
-      if (result.center && typeof result.center.lat === 'number' && typeof result.center.lon === 'number') {
-        map.setCenter({ lat: result.center.lat, lng: result.center.lon });
+      // Determine circle center: prefer explicit result.center, fall back to mean of points
+      let circleLat, circleLon;
+      if (result.center && typeof result.center.lat === 'number') {
+        circleLat = result.center.lat;
+        circleLon = result.center.lon;
+      } else if (result.points.length > 0) {
+        circleLat = result.points.reduce((s, p) => s + p.lat, 0) / result.points.length;
+        circleLon = result.points.reduce((s, p) => s + p.lon, 0) / result.points.length;
+      } else {
+        return;
+      }
+
+      // Center map on search
+      if (!append && result.center && typeof result.center.lat === 'number') {
+        map.setCenter({ lat: circleLat, lng: circleLon });
         map.setZoom(9);
       }
 
-      // Filter points to only include those on land
+      // Aggregate probability across all land points
       const landPoints = result.points.filter(p => isOnLand(p.lat, p.lon));
-      
-      console.log(`[LANDMASK] Filtered ${result.points.length} points to ${landPoints.length} land points`);
+      console.log(`[LANDMASK] ${sourceName}: ${result.points.length} → ${landPoints.length} land points`);
 
-      landPoints.forEach(p => {
-        const prob = typeof p.prob === 'number' ? p.prob : 0;
-        const probPct = prob * 100;
-        const risk = p.risk || 'low';
+      const avgProb = landPoints.length > 0
+        ? landPoints.reduce((s, p) => s + (typeof p.prob === 'number' ? p.prob : 0), 0) / landPoints.length
+        : 0;
+      const maxProb = landPoints.length > 0
+        ? Math.max(...landPoints.map(p => typeof p.prob === 'number' ? p.prob : 0))
+        : 0;
+      const probPct = avgProb * 100;
 
-        // Updated color scheme with yellow for warning
-        const color =
-          risk === 'high' ? '#ef4444' :        // red (>= 0.75)
-          risk === 'warning' ? '#fbbf24' :     // yellow (0.5 - 0.75)
-          risk === 'medium' ? '#fb923c' :      // orange (0.3 - 0.5)
-          '#22c55e';                           // green (< 0.3)
+      const risk =
+        avgProb >= 0.75 ? 'high' :
+        avgProb >= 0.5  ? 'warning' :
+        avgProb >= 0.3  ? 'medium' : 'low';
 
-        const center = { lat: p.lat, lng: p.lon };
+      const color =
+        risk === 'high'    ? '#ef4444' :
+        risk === 'warning' ? '#fbbf24' :
+        risk === 'medium'  ? '#fb923c' :
+        '#22c55e';
 
-        const circle = new google.maps.Circle({
-          strokeColor: color,
-          strokeOpacity: 0.9,
-          strokeWeight: 1.5,
-          fillColor: color,
-          fillOpacity: 0.4,
-          map,
-          center,
-          radius: 3000, // Smaller radius for better circular appearance
-        });
+      const riskLabel =
+        risk === 'high'    ? 'High Risk' :
+        risk === 'warning' ? 'Elevated Risk' :
+        risk === 'medium'  ? 'Moderate Risk' :
+        'Low Risk';
 
-        circle._prob = probPct;
-        circle._risk = risk;
+      const riskBg =
+        risk === 'high'    ? '#fef2f2' :
+        risk === 'warning' ? '#fffbeb' :
+        risk === 'medium'  ? '#fff7ed' :
+        '#f0fdf4';
 
-        const info = new google.maps.InfoWindow({
-          content: `
-            <div style="font-size: 13px;">
-              <strong>Flood risk:</strong> ${probPct.toFixed(1)}% (${risk})<br/>
-              <strong>Lat/Lon:</strong> ${center.lat.toFixed(3)}, ${center.lng.toFixed(3)}
-            </div>
-          `,
-        });
+      const riskBorder =
+        risk === 'high'    ? '#fca5a5' :
+        risk === 'warning' ? '#fde68a' :
+        risk === 'medium'  ? '#fdba74' :
+        '#86efac';
 
-        circle.addListener('click', (e) => {
-          info.setPosition(e.latLng);
-          info.open(map);
-        });
-
-        modelCircles.push(circle);
+      const circle = new google.maps.Circle({
+        strokeColor: color,
+        strokeOpacity: 0.85,
+        strokeWeight: 2,
+        fillColor: color,
+        fillOpacity: 0.25,
+        map,
+        center: { lat: circleLat, lng: circleLon },
+        radius: radius,
       });
+
+      circle._prob = probPct;
+      circle._risk = risk;
+      circle._sourceName = sourceName;
+      circle._isPreloaded = isPreloaded;
+
+      const infoContent = `
+        <div style="
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          min-width: 200px;
+          max-width: 260px;
+          padding: 4px 2px;
+        ">
+          <div style="
+            font-size: 15px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+          ">${sourceName}</div>
+
+          <div style="
+            display: inline-block;
+            background: ${riskBg};
+            border: 1px solid ${riskBorder};
+            color: ${color};
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 999px;
+            margin-bottom: 10px;
+          ">${riskLabel}</div>
+
+          <div style="margin-bottom: 6px;">
+            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Avg Flood Probability</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="flex: 1; background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
+                <div style="width: ${probPct.toFixed(1)}%; background: ${color}; height: 100%; border-radius: 4px;"></div>
+              </div>
+              <span style="font-size: 13px; font-weight: 600; color: #111827; min-width: 38px; text-align: right;">${probPct.toFixed(1)}%</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 6px;">
+            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Peak Probability</div>
+            <span style="font-size: 13px; font-weight: 500; color: #374151;">${(maxProb * 100).toFixed(1)}%</span>
+          </div>
+
+          <div style="
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid #f3f4f6;
+          ">${circleLat.toFixed(3)}°, ${circleLon.toFixed(3)}° &nbsp;·&nbsp; ${landPoints.length} sample points</div>
+        </div>
+      `;
+
+      const info = new google.maps.InfoWindow({ content: infoContent });
+      circle._infoWindow = info;
+
+      circle.addListener('click', (e) => {
+        if (activeInfoWindow) activeInfoWindow.close();
+        info.setPosition(e.latLng);
+        info.open(map);
+        activeInfoWindow = info;
+      });
+
+      modelCircles.push(circle);
     }
 
-  const floodData = [
-    {
-      name: "Houston Metro Area",
-      coordinates: [
-        {lat: 29.7604, lng: -95.3698}, {lat: 29.8504, lng: -95.3298},
-        {lat: 29.9104, lng: -95.4198}, {lat: 29.9404, lng: -95.5298},
-        {lat: 29.8804, lng: -95.6498}, {lat: 29.7804, lng: -95.6898},
-        {lat: 29.6704, lng: -95.5898}, {lat: 29.6404, lng: -95.4598},
-        {lat: 29.6904, lng: -95.3598}
-      ],
-      probability: 78,
-      depth: "3.2 - 4.8 meters",
-      soilMoisture: "92%",
-      velocity: "2.3 m/s",
-      duration: "48-72 hours",
-      precipitation: "254 mm/24h",
-      elevation: "15-25m ASL",
-      populationRisk: "~425,000",
-      infrastructureImpact: "Critical - highways, power grid",
-      lastIncident: "2024-02-15",
-      severity: "high"
-    },
-    {
-      name: "Sacramento Valley",
-      coordinates: [
-        {lat: 38.5816, lng: -121.4944}, {lat: 38.6816, lng: -121.4344},
-        {lat: 38.7516, lng: -121.5244}, {lat: 38.7916, lng: -121.6544},
-        {lat: 38.7216, lng: -121.7844}, {lat: 38.6116, lng: -121.8244},
-        {lat: 38.5016, lng: -121.7344}, {lat: 38.4716, lng: -121.5944}
-      ],
-      probability: 62,
-      depth: "2.1 - 3.5 meters",
-      soilMoisture: "88%",
-      velocity: "1.8 m/s",
-      duration: "36-48 hours",
-      precipitation: "178 mm/24h",
-      elevation: "8-18m ASL",
-      populationRisk: "~310,000",
-      infrastructureImpact: "Moderate - residential, agriculture",
-      lastIncident: "2024-01-20",
-      severity: "medium"
-    },
-    {
-      name: "New Orleans Region",
-      coordinates: [
-        {lat: 29.95, lng: -90.07}, {lat: 30.05, lng: -89.87},
-        {lat: 30.12, lng: -89.95}, {lat: 30.09, lng: -90.15},
-        {lat: 30.02, lng: -90.28}, {lat: 29.92, lng: -90.32},
-        {lat: 29.85, lng: -90.22}
-      ],
-      probability: 85,
-      depth: "4.1 - 5.5 meters",
-      soilMoisture: "95%",
-      velocity: "2.8 m/s",
-      duration: "72-96 hours",
-      precipitation: "305 mm/24h",
-      elevation: "0-10m ASL",
-      populationRisk: "~380,000",
-      infrastructureImpact: "Severe - levees, infrastructure",
-      lastIncident: "2024-03-10",
-      severity: "high"
-    },
-    {
-      name: "Miami-Dade Coast",
-      coordinates: [
-        {lat: 25.76, lng: -80.19}, {lat: 25.85, lng: -80.13},
-        {lat: 25.91, lng: -80.20}, {lat: 25.88, lng: -80.35},
-        {lat: 25.78, lng: -80.42}, {lat: 25.70, lng: -80.38}
-      ],
-      probability: 45,
-      depth: "1.5 - 2.8 meters",
-      soilMoisture: "82%",
-      velocity: "1.4 m/s",
-      duration: "24-36 hours",
-      precipitation: "152 mm/24h",
-      elevation: "2-8m ASL",
-      populationRisk: "~215,000",
-      infrastructureImpact: "Moderate - coastal properties",
-      lastIncident: "2023-11-05",
-      severity: "medium"
-    }
-  ];
-
-  const droughtData = [
-    {
-      name: "Central California",
-      coordinates: [
-        {lat: 36.7, lng: -120.9}, {lat: 36.9, lng: -120.5},
-        {lat: 37.1, lng: -120.0}, {lat: 37.0, lng: -119.4},
-        {lat: 36.5, lng: -118.8}, {lat: 36.0, lng: -118.9},
-        {lat: 35.6, lng: -119.5}, {lat: 35.4, lng: -120.2},
-        {lat: 35.7, lng: -120.7}
-      ],
-      probability: 82,
-      temperature: "38-42°C",
-      soilMoisture: "15%",
-      precipitation: "45% below normal",
-      vegetation: "Severely stressed",
-      waterSupply: "Critical shortage",
-      duration: "18+ months",
-      affectedArea: "Central Valley agricultural region",
-      severity: "high"
-    },
-    {
-      name: "Arizona Desert Basin",
-      coordinates: [
-        {lat: 33.5, lng: -112.5}, {lat: 33.9, lng: -112.0},
-        {lat: 34.2, lng: -111.5}, {lat: 34.3, lng: -111.0},
-        {lat: 34.1, lng: -110.6}, {lat: 33.7, lng: -110.5},
-        {lat: 33.3, lng: -110.8}, {lat: 33.1, lng: -111.3},
-        {lat: 33.2, lng: -111.9}
-      ],
-      probability: 88,
-      temperature: "40-45°C",
-      soilMoisture: "8%",
-      precipitation: "60% below normal",
-      vegetation: "Critically stressed",
-      waterSupply: "Emergency restrictions",
-      duration: "24+ months",
-      affectedArea: "Phoenix metropolitan area",
-      severity: "high"
-    },
-    {
-      name: "West Texas Plains",
-      coordinates: [
-        {lat: 32.0, lng: -102.5}, {lat: 32.5, lng: -102.0},
-        {lat: 33.0, lng: -101.5}, {lat: 32.8, lng: -101.0},
-        {lat: 32.3, lng: -100.8}, {lat: 31.8, lng: -101.2},
-        {lat: 31.6, lng: -102.0}
-      ],
-      probability: 65,
-      temperature: "36-40°C",
-      soilMoisture: "22%",
-      precipitation: "38% below normal",
-      vegetation: "Moderately stressed",
-      waterSupply: "Shortage warnings",
-      duration: "12+ months",
-      affectedArea: "Agricultural and ranching lands",
-      severity: "medium"
-    },
-    {
-      name: "Eastern Colorado",
-      coordinates: [
-        {lat: 40.0, lng: -104.5}, {lat: 40.5, lng: -104.0},
-        {lat: 40.8, lng: -103.5}, {lat: 40.6, lng: -103.0},
-        {lat: 40.1, lng: -102.8}, {lat: 39.7, lng: -103.3},
-        {lat: 39.6, lng: -104.0}
-      ],
-      probability: 55,
-      temperature: "33-38°C",
-      soilMoisture: "28%",
-      precipitation: "32% below normal",
-      vegetation: "Slightly stressed",
-      waterSupply: "Conservation measures",
-      duration: "8+ months",
-      affectedArea: "High plains region",
-      severity: "medium"
-    }
-  ];
+  // Removed hardcoded region-specific flood/drought overlays.
+  // Map overlays should come from model-driven locations instead of fixed polygons.
+  const floodData = [];
+  const droughtData = [];
 
   function openFloodModal(zone) {
     const modal = document.getElementById('dataModal');
@@ -1037,6 +1188,11 @@
       const visible = showDrought && zone.probability >= minProb && zone.probability <= maxProb;
       polygon.setVisible(visible);
     });
+
+    modelCircles.forEach((circle) => {
+      const visible = showFlood && circle._prob >= minProb && circle._prob <= maxProb;
+      circle.setVisible(visible);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -1078,9 +1234,17 @@
 
     function initMap() {
     map = new google.maps.Map(document.getElementById("map"), {
-      zoom: 5,
-      center: { lat: 35.0, lng: -100.0 },
+      zoom: 4.5,
+      center: { lat: 8.0, lng: 110.0 },
       mapTypeId: "terrain",
+    });
+
+    // Close any open popup when clicking the map background
+    map.addListener('click', () => {
+      if (activeInfoWindow) {
+        activeInfoWindow.close();
+        activeInfoWindow = null;
+      }
     });
 
     const form = document.getElementById('searchForm');
@@ -1116,9 +1280,12 @@
         const loc = autocompletePlace.geometry.location;
         const lat = loc.lat();
         const lng = loc.lng();
+        if (focusExistingPreloadedCircle(lat, lng)) {
+          return;
+        }
         map.setCenter(loc);
         map.setZoom(8);
-        requestFloodRisk(lat, lng);
+        requestFloodRisk(lat, lng, { append: true, sourceName: query });
         return;
       }
 
@@ -1127,14 +1294,19 @@
           const loc = results[0].geometry.location;
           const lat = loc.lat();
           const lng = loc.lng();
+          if (focusExistingPreloadedCircle(lat, lng)) {
+            return;
+          }
           map.setCenter(loc);
           map.setZoom(8);
-          requestFloodRisk(lat, lng);
+          requestFloodRisk(lat, lng, { append: true, sourceName: query });
         } else {
           alert('Location not found.');
         }
       });
     });
+
+    loadRegionalFloodRisk();
 
     floodData.forEach(zone => {
       const polygon = new google.maps.Polygon({

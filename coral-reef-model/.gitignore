@@ -1,0 +1,26 @@
+# Data files (raw data should not be committed)
+data/raw/*.csv
+data/raw/*.xlsx
+data/raw/*.nc
+data/raw/*.parquet
+
+# Processed data
+data/processed/*.csv
+
+# Model artifacts
+outputs/models/*.json
+outputs/scalers/*.pkl
+
+# Figures (regenerable)
+outputs/figures/*.png
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Environment
+.env
+venv/
+.venv/
