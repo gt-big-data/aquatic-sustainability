@@ -183,6 +183,16 @@
     margin-bottom: 12px;
     color: var(--text);
   }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .workspace {
+    flex: 1 0 0;
+  }
 </style>
 </head>
 <body>
@@ -207,10 +217,6 @@
 </div>
 </div>
 </main>
-
-<footer class="site-footer">
-<small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water & Sanitation</small>
-</footer>
 
 <script>
   const newsData = [];
