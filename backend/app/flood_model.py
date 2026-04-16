@@ -47,6 +47,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 MAX_WORKERS = 4
 
+RUNNING_ON_CLOUD_RUN = bool(os.environ.get("K_SERVICE"))
+FAST_START_FLOOD_DATA = os.environ.get(
+    "FAST_START_FLOOD_DATA",
+    "1" if RUNNING_ON_CLOUD_RUN else "0",
+).lower() in {"1", "true", "yes", "on"}
+
 # Global precipitation cache path
 GPM_GLOBAL_NPY = os.path.join(DATA_CACHE_DIR, "global_gpm_4days.npy")
 
@@ -154,6 +160,10 @@ def load_global_smap():
     if os.path.exists(SMAP_GLOBAL_NPY):
         GLOBAL_SMAP = np.load(SMAP_GLOBAL_NPY)
         print(f"[GLOBAL SMAP] Loaded cached stack: {GLOBAL_SMAP.shape}")
+    elif FAST_START_FLOOD_DATA:
+        print("[GLOBAL SMAP] Cache missing — using synthetic data for fast startup.")
+        GLOBAL_SMAP = np.random.uniform(0.1, 0.5, (21, 720, 1440)).astype(np.float32)
+        print(f"[GLOBAL SMAP] Using synthetic data: {GLOBAL_SMAP.shape}")
     else:
         print("[GLOBAL SMAP] Cache missing — auto-building 21-day stack…")
         try:
@@ -178,6 +188,10 @@ def load_global_gpm():
     if os.path.exists(GPM_GLOBAL_NPY):
         GLOBAL_GPM = np.load(GPM_GLOBAL_NPY)
         print(f"[GLOBAL GPM] Loaded cached stack: {GLOBAL_GPM.shape}")
+    elif FAST_START_FLOOD_DATA:
+        print("[GLOBAL GPM] Cache missing — using synthetic data for fast startup.")
+        GLOBAL_GPM = np.random.uniform(0, 5, (32, 1800, 3600)).astype(np.float32)
+        print(f"[GLOBAL GPM] Using synthetic data: {GLOBAL_GPM.shape}")
     else:
         print("[GLOBAL GPM] Cache missing — building 4-day global stack…")
         try:
