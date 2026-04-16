@@ -15,6 +15,7 @@ Outputs:
 
 import json
 import os
+import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -31,7 +32,10 @@ try:
     HAS_CARTOPY = True
 except ImportError:
     HAS_CARTOPY = False
-    print("cartopy not installed -- maps will be without coastlines")
+    print(
+        "cartopy not installed in current Python "
+        f"({sys.executable}) -- maps will be without coastlines"
+    )
 
 try:
     import imageio.v2 as imageio
@@ -48,10 +52,29 @@ if not ALL_WEEKS_PATH.exists():
     ALT_PATH = Path(__file__).resolve().parents[1] / "experiments" / "results" / "crw_gbr_sequences_reduced_16_centroids_all_weeks.npz"
     if ALT_PATH.exists():
         ALL_WEEKS_PATH = ALT_PATH
+    else:
+        DATASET_PATH = Path(__file__).resolve().parents[2] / "coral reef analysis" / "datasets" / "crw_gbr_sequences_reduced_16_centroids_all_weeks.npz"
+        if DATASET_PATH.exists():
+            ALL_WEEKS_PATH = DATASET_PATH
 
 CLASS_LABELS = ["None (0%)", "Moderate (1-50%)", "Severe (>50%)"]
 CLASS_COLORS = {0: "#4393c3", 1: "#f4a582", 2: "#d6604d"}
 EXTENT = [141.5, 154.5, -25.5, -9.5]
+
+
+def _normalize_name(name: str) -> str:
+    return "".join(ch for ch in str(name).lower() if ch.isalnum())
+
+
+def _find_feature_idx(feature_names, candidates):
+    norm_names = [_normalize_name(n) for n in feature_names]
+    for cand in candidates:
+        cand_norm = _normalize_name(cand)
+        if cand_norm in norm_names:
+            return norm_names.index(cand_norm)
+    raise ValueError(
+        f"Could not find any of {candidates} in feature_names={list(feature_names)}"
+    )
 
 
 def load_data():
@@ -72,6 +95,11 @@ def run_52week_inference(model, config, inf_data):
     meta_all = inf_data["meta"]     # (6916, 4)
     feature_names = list(inf_data["feature_names"])
     FEATURE_COLS = config["feature_columns"]
+    if "year" in FEATURE_COLS:
+        raise ValueError(
+            "Loaded model_config still includes 'year' as a feature. "
+            "Retrain with final/train_final.py to produce year-free artifacts."
+        )
 
     end_times = inf_data["end_time"]
     unique_dates = np.unique(end_times)
@@ -92,8 +120,8 @@ def run_52week_inference(model, config, inf_data):
     weekly_probabilities = []
     weekly_prediction_rows = []
     class_labels = config["class_labels"]
-    dhw_idx = feature_names.index("TSA_DHW") if "TSA_DHW" in feature_names else 2
-    sst_idx = feature_names.index("FilledSST") if "FilledSST" in feature_names else 0
+    dhw_idx = _find_feature_idx(feature_names, ["tsa_dhw", "TSA_DHW"])
+    sst_idx = _find_feature_idx(feature_names, ["filled_sst", "FilledSST"])
 
     for wi, date in enumerate(unique_dates):
         mask = end_times == date
@@ -107,7 +135,6 @@ def run_52week_inference(model, config, inf_data):
                 flat[f"{fname}_week{w:02d}"] = X_seq[:, w, i]
         flat["latitude"] = meta[:, 0]
         flat["longitude"] = meta[:, 1]
-        flat["year"] = meta[:, 2]
         flat["month"] = meta[:, 3]
         X_flat = pd.DataFrame(flat).fillna(0)
 

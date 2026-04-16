@@ -2,10 +2,10 @@
 
 ## Model
 
-3-class coral bleaching classifier using raw weekly flattening (68 features) with tuned hyperparameters from ablation experiments.
+3-class coral bleaching classifier using raw weekly flattening (67 features) with tuned hyperparameters from ablation experiments.
 
 - **Bins:** 0% / 1-50% / >50% (None / Moderate / Severe)
-- **Flattening:** Raw weekly (16 weeks x 4 features + 4 metadata = 68)
+- **Flattening:** Raw weekly (16 weeks x 4 features + 3 metadata = 67, excluding `year`)
 - **Split:** 70/15/15 stratified (seed=42, matches William's LSTM)
 - **Class weights:** Balanced via `compute_sample_weight`
 

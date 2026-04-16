@@ -41,12 +41,12 @@ BLEACH_LABELS = [0, 1, 2]
 # Features to extract (4 total)
 FEATURE_NAMES = [
     "FilledSST",      # Raw SST
-    # "SSTA",           # SST Anomaly (vs weekly climatology)
+    "SSTA",           # SST Anomaly (vs weekly climatology)
     # "SSTA_DHW",       # SSTA-based Degree Heating Weeks
     # "SSTA_Frequency", # SSTA frequency (times SSTA>=1 in past 52 weeks)
     "TSA",            # Thermal Stress Anomaly (vs max monthly mean)
     "TSA_DHW",        # TSA-based Degree Heating Weeks (standard DHW)
-    "TSA_Frequency",  # TSA frequency (times TSA>=1 in past 52 weeks)
+    # "TSA_Frequency",  # TSA frequency (times TSA>=1 in past 52 weeks)
 ]
 
 # ──────────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ t0 = time.time()
 
 # Use chunks to avoid loading everything into memory
 sst_ds = xr.open_dataset(SST_PATH, chunks={"time": 104})
-# ssta_ds = xr.open_dataset(SSTA_PATH, chunks={"time": 104})
+ssta_ds = xr.open_dataset(SSTA_PATH, chunks={"time": 104})
 tsa_ds = xr.open_dataset(TSA_PATH, chunks={"time": 104})
 
 print(f"  Opened in {time.time()-t0:.1f}s")
@@ -133,10 +133,10 @@ t0 = time.time()
 sst_all = sst_ds["FilledSST"].sel(lat=lats, lon=lons, method="nearest").load()
 print(f"done ({time.time()-t0:.1f}s)")
 
-# print("  Extracting SSTA...", end=" ", flush=True)
-# t0 = time.time()
-# ssta_all = ssta_ds["SSTA"].sel(lat=lats, lon=lons, method="nearest").load()
-# print(f"done ({time.time()-t0:.1f}s)")
+print("  Extracting SSTA...", end=" ", flush=True)
+t0 = time.time()
+ssta_all = ssta_ds["SSTA"].sel(lat=lats, lon=lons, method="nearest").load()
+print(f"done ({time.time()-t0:.1f}s)")
 
 # print("  Extracting SSTA_DHW...", end=" ", flush=True)
 # t0 = time.time()
@@ -158,10 +158,10 @@ t0 = time.time()
 tsa_dhw_all = tsa_ds["TSA_DHW"].sel(lat=lats, lon=lons, method="nearest").load()
 print(f"done ({time.time()-t0:.1f}s)")
 
-print("  Extracting TSA_Frequency...", end=" ", flush=True)
-t0 = time.time()
-tsa_freq_all = tsa_ds["TSA_Frequency"].sel(lat=lats, lon=lons, method="nearest").load()
-print(f"done ({time.time()-t0:.1f}s)")
+# print("  Extracting TSA_Frequency...", end=" ", flush=True)
+# t0 = time.time()
+# tsa_freq_all = tsa_ds["TSA_Frequency"].sel(lat=lats, lon=lons, method="nearest").load()
+# print(f"done ({time.time()-t0:.1f}s)")
 
 # Clip TSA to >= 0 to match CRW HotSpot behavior
 tsa_all = tsa_all.clip(min=0)
@@ -169,12 +169,12 @@ tsa_all = tsa_all.clip(min=0)
 # Stack into a single array: (time, site, features)
 all_features = np.stack([
     sst_all.values,
-    # ssta_all.values,
+    ssta_all.values,
     # ssta_dhw_all.values,
     # ssta_freq_all.values,
     tsa_all.values,
     tsa_dhw_all.values,
-    tsa_freq_all.values,
+    # tsa_freq_all.values,
 ], axis=-1)  # shape: (num_weeks, num_sites, 4)
 
 print(f"\n  Combined feature array shape: {all_features.shape}")

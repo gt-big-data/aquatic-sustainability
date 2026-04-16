@@ -62,6 +62,14 @@ def parse_args() -> argparse.Namespace:
         default="n_records",
         help="Cluster size column in clusters CSV (optional, saved if present).",
     )
+    parser.add_argument(
+        "--allow-zero-match",
+        action="store_true",
+        help=(
+            "Allow nearest match from all rows, including all-zero sequences. "
+            "Default behavior filters candidate rows to non-zero sequence signal."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -100,6 +108,16 @@ def haversine_km_many_to_many(
     return EARTH_RADIUS_KM * c
 
 
+def nonzero_sequence_mask(X: np.ndarray, eps: float = 0.0) -> np.ndarray:
+    """
+    Return boolean mask (N,) where each row has any non-zero signal
+    across all timesteps/features.
+    """
+    if X.ndim != 3:
+        raise ValueError(f"Expected X shape (N, T, F); got {X.shape}")
+    return np.any(np.abs(np.nan_to_num(X, nan=0.0)) > eps, axis=(1, 2))
+
+
 def main() -> None:
     args = parse_args()
     input_npz = Path(args.input_npz).resolve()
@@ -126,6 +144,7 @@ def main() -> None:
         raise ValueError(f"Expected meta shape (N, >=2), got {meta.shape}")
     if end_time.ndim != 1 or end_time.shape[0] != n_rows:
         raise ValueError(f"Expected end_time shape (N,), got {end_time.shape}")
+    row_has_signal = nonzero_sequence_mask(X)
 
     unique_end_times = np.sort(np.unique(end_time))
     T = len(unique_end_times)
@@ -151,18 +170,36 @@ def main() -> None:
     # One output row per (end_time, cluster centroid).
     chosen_idx = np.empty((T, K), dtype=np.int64)
     chosen_dist_km = np.empty((T, K), dtype=np.float64)
+    week_used_nonzero = np.zeros((T,), dtype=bool)
+    week_valid_counts = np.zeros((T,), dtype=np.int64)
+    fallback_weeks = 0
     for t_i, ts in enumerate(unique_end_times):
         mask = end_time == ts
         row_idx = np.flatnonzero(mask)
         if row_idx.size == 0:
             raise RuntimeError(f"No rows found for end_time={ts}")
 
-        week_lats = meta[row_idx, 0].astype(np.float64)
-        week_lons = meta[row_idx, 1].astype(np.float64)
+        if args.allow_zero_match:
+            candidate_idx = row_idx
+            week_used_nonzero[t_i] = False
+        else:
+            candidate_mask = row_has_signal[row_idx]
+            candidate_idx = row_idx[candidate_mask]
+            if candidate_idx.size == 0:
+                # Safety fallback: if a week has no non-zero candidates, keep behavior robust.
+                candidate_idx = row_idx
+                week_used_nonzero[t_i] = False
+                fallback_weeks += 1
+            else:
+                week_used_nonzero[t_i] = True
+        week_valid_counts[t_i] = candidate_idx.size
+
+        week_lats = meta[candidate_idx, 0].astype(np.float64)
+        week_lons = meta[candidate_idx, 1].astype(np.float64)
         dist = haversine_km_many_to_many(centroid_lats, centroid_lons, week_lats, week_lons)
         nearest_local = np.argmin(dist, axis=1)
 
-        chosen_idx[t_i, :] = row_idx[nearest_local]
+        chosen_idx[t_i, :] = candidate_idx[nearest_local]
         chosen_dist_km[t_i, :] = dist[np.arange(K), nearest_local]
 
         if (t_i + 1) % 10 == 0 or (t_i + 1) == T:
@@ -195,6 +232,7 @@ def main() -> None:
     payload["matched_lon"] = payload["meta"][:, 1].astype(np.float32)
     payload["centroid_match_distance_km"] = chosen_dist_flat.astype(np.float32)
     payload["target_end_time"] = target_end_times
+    payload["match_used_nonzero_filter"] = np.repeat(week_used_nonzero, K)
     if args.cluster_size_col in clusters.columns:
         payload["cluster_n_records"] = np.tile(clusters[args.cluster_size_col].to_numpy(), T)
 
@@ -210,6 +248,18 @@ def main() -> None:
     print(f"Output X shape: {payload['X'].shape}")
     print(f"Output rows (end_time x clusters): {T:,} x {K:,} = {T * K:,}")
     print(f"Unique matched sequence rows: {unique_matches:,} / {T * K:,}")
+    if args.allow_zero_match:
+        print("Candidate filter: disabled (--allow-zero-match)")
+    else:
+        print(
+            "Candidate filter: non-zero rows only "
+            f"(weekly candidate count min/median/max="
+            f"{int(week_valid_counts.min())}/"
+            f"{int(np.median(week_valid_counts))}/"
+            f"{int(week_valid_counts.max())})"
+        )
+        if fallback_weeks > 0:
+            print(f"Fallback weeks (no non-zero candidates): {fallback_weeks}")
     print(
         "Match distance (km): "
         f"min={chosen_dist_flat.min():.4f}, "
