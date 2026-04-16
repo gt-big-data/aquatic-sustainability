@@ -383,6 +383,12 @@ def extract_precip_window(precip_da: xr.DataArray, target_lat: float, target_lon
 
     return out
 
+# Precomputed grid lookup arrays (avoids recomputing on every inference point)
+_SMAP_LAT_VALS = np.linspace(90, -90, 720)
+_SMAP_LON_VALS = np.linspace(-180, 180, 1440)
+_GPM_LAT_VALS  = np.linspace(90, -90, 1800)
+_GPM_LON_VALS  = np.linspace(-180, 180, 3600)
+
 def extract_precip_from_global(lat: float, lon: float, size=250):
     """
     Extract precipitation windows from GLOBAL_GPM for a specific location.
@@ -393,16 +399,8 @@ def extract_precip_from_global(lat: float, lon: float, size=250):
     if GLOBAL_GPM is None:
         raise RuntimeError("GLOBAL_GPM not loaded")
     
-    # GPM grid: 0.1° resolution, 1800 x 3600
-    # Latitude: 90 to -90 (descending)
-    # Longitude: -180 to 180 (ascending)
-    
-    lat_vals = np.linspace(90, -90, 1800)
-    lon_vals = np.linspace(-180, 180, 3600)
-    
-    # Find indices in the 0.1° grid
-    iy = int(np.argmin(np.abs(lat_vals - lat)))
-    ix = int(np.argmin(np.abs(lon_vals - lon)))
+    iy = int(np.argmin(np.abs(_GPM_LAT_VALS - lat)))
+    ix = int(np.argmin(np.abs(_GPM_LON_VALS - lon)))
     
     half = size // 2
     
@@ -442,22 +440,14 @@ def extract_precip_from_global(lat: float, lon: float, size=250):
 def prepare_inference_data(location, scaler):
     """
     Prepare data for one location using global cached grids.
+    NOTE: ensure_global_data_loaded() must be called before this function.
     """
-    print(f"\n{'='*60}")
-    print(f"Processing location: {location['name']} ({location['lat']}, {location['lon']})")
-    print(f"{'='*60}")
-
-    ensure_global_data_loaded()
-
     lat = location["lat"]
     lon = location["lon"]
 
     # Extract SMAP data from global cache
-    lat_vals = np.linspace(90, -90, GLOBAL_SMAP.shape[1])
-    lon_vals = np.linspace(-180, 180, GLOBAL_SMAP.shape[2])
-
-    iy = int(np.argmin(np.abs(lat_vals - lat)))
-    ix = int(np.argmin(np.abs(lon_vals - lon)))
+    iy = int(np.argmin(np.abs(_SMAP_LAT_VALS - lat)))
+    ix = int(np.argmin(np.abs(_SMAP_LON_VALS - lon)))
 
     half = SOIL_GRID_SIZE // 2
 
@@ -488,30 +478,28 @@ def prepare_inference_data(location, scaler):
         soil_grids.append(window)
 
     # Extract GPM data from global cache
-    print(f"[GPM] Extracting from global cache")
     precip_grids = extract_precip_from_global(lat, lon, size=PRECIP_GRID_SIZE)
 
     if len(precip_grids) < 32:
         print(f"[WARNING] Only got {len(precip_grids)}/32 precipitation time steps")
         return None
 
-    # Process precipitation (apply scaler)
-    precip_seq = []
-    for grid in precip_grids[:32]:
-        scaled = scaler.transform(grid.flatten().reshape(-1, 1)).reshape(grid.shape)
-        precip_seq.append(scaled[np.newaxis, ...])
+    # Process precipitation — vectorized: scale all 32 grids in one call
+    p_arr = precip_grids[:32]  # (32, H, W)
+    orig_shape = p_arr.shape
+    p_scaled = scaler.transform(p_arr.reshape(-1, 1)).reshape(orig_shape)
+    precip_tensor = torch.tensor(p_scaled[:, np.newaxis, :, :], dtype=torch.float32)
 
-    # Process soil moisture
-    soil_seq = []
-    for grid in soil_grids[:21]:
-        mask = ~np.isnan(grid)
-        grid_filled = np.nan_to_num(grid, nan=0.0)
-        scaled_sm = scaler.transform(grid_filled.flatten().reshape(-1, 1)).reshape(grid.shape)
-        stacked = np.stack([scaled_sm, mask.astype(float)], axis=0)
-        soil_seq.append(stacked)
-
-    precip_tensor = torch.tensor(np.stack(precip_seq), dtype=torch.float32)
-    soil_tensor = torch.tensor(np.stack(soil_seq), dtype=torch.float32)
+    # Process soil moisture — vectorized: scale all 21 grids in one call
+    s_arr = np.stack(soil_grids[:21])          # (21, H, W)
+    masks = ~np.isnan(s_arr)
+    s_filled = np.nan_to_num(s_arr, nan=0.0)
+    orig_s_shape = s_filled.shape
+    s_scaled = scaler.transform(s_filled.reshape(-1, 1)).reshape(orig_s_shape)
+    # Stack scaled + mask channels: (21, 2, H, W)
+    soil_tensor = torch.tensor(
+        np.stack([s_scaled, masks.astype(np.float32)], axis=1), dtype=torch.float32
+    )
 
     return precip_tensor, soil_tensor
 
@@ -590,7 +578,7 @@ def run_flood_inference(center_lat, center_lon):
 
     # ── Full model inference ─────────────────────────────────────────────────
     model, scaler = get_model_and_scaler()
-    ensure_global_data_loaded()
+    ensure_global_data_loaded()  # load once before processing all points
 
     locations = build_radial_locations(center_lat, center_lon)
 
@@ -598,6 +586,7 @@ def run_flood_inference(center_lat, center_lon):
     batch_soil = []
     valid_locs = []
 
+    print(f"[INFERENCE] Processing {len(locations)} radial points for ({center_lat:.3f}, {center_lon:.3f})")
     for loc in locations:
         result = prepare_inference_data(loc, scaler)
         if result is not None:
