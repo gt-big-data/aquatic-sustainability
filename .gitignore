@@ -1,6 +1,13 @@
 .DS_Store
 # NASA / model caches
 backend/data/
+!backend/data/
+backend/data/*
+!backend/data/coral_bleaching/
+backend/data/coral_bleaching/*
+!backend/data/coral_bleaching/gbr_predictions_temporal_lstm.csv
+!backend/data/coral_bleaching/gbr_predictions_temporal_xgboost.csv
+!backend/data/coral_bleaching/centroid_names.json
 backend/gpm_temp/
 *.npy
 *.HDF5
