@@ -6,6 +6,7 @@ Create GBR prediction maps:
 """
 
 import json
+import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -23,13 +24,16 @@ try:
     HAS_CARTOPY = True
 except ImportError:
     HAS_CARTOPY = False
-    print("cartopy not installed -- maps will be without coastlines")
+    print(
+        "cartopy not installed in current Python "
+        f"({sys.executable}) -- maps will be without coastlines"
+    )
 
 from scipy.spatial import cKDTree
 
 ROOT = Path(__file__).resolve().parents[2]
-INFERENCE_PATH = ROOT / "coral reef analysis" / "datasets" / "crw_gbr_sequences_reduced_16_latest_week_centroids.npz"
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
+ALL_WEEKS_NAME = "crw_gbr_sequences_reduced_16_centroids_all_weeks.npz"
 
 CLASS_LABELS = ["None (0%)", "Moderate (1-50%)", "Severe (>50%)"]
 CLASS_COLORS = {
@@ -40,6 +44,40 @@ CLASS_COLORS = {
 
 # GBR bounding box
 EXTENT = [141.5, 154.5, -25.5, -9.5]
+
+
+def _resolve_all_weeks_path() -> Path:
+    candidates = [
+        RESULTS_DIR / ALL_WEEKS_NAME,
+        Path(__file__).resolve().parents[1] / "experiments" / "results" / ALL_WEEKS_NAME,
+        ROOT / "coral reef analysis" / "datasets" / ALL_WEEKS_NAME,
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    raise FileNotFoundError(
+        f"Could not find {ALL_WEEKS_NAME} in any expected location: "
+        + ", ".join(str(p) for p in candidates)
+    )
+
+
+def _latest_week_slice(inf_data):
+    end_times = inf_data["end_time"]
+    latest_date = np.max(end_times)
+    latest_mask = end_times == latest_date
+    latest_idx = np.where(latest_mask)[0]
+    if len(latest_idx) == 0:
+        raise ValueError("No rows found for latest end_time in all-weeks dataset.")
+    cluster_ids = inf_data["cluster_id"][latest_idx]
+    latest_idx = latest_idx[np.argsort(cluster_ids)]
+    latest_data = {
+        "X": inf_data["X"][latest_idx],
+        "centroid_lat": inf_data["centroid_lat"][latest_idx],
+        "centroid_lon": inf_data["centroid_lon"][latest_idx],
+        "cluster_id": inf_data["cluster_id"][latest_idx],
+        "feature_names": inf_data["feature_names"],
+    }
+    return latest_data, latest_date
 
 
 def make_ax(fig, extent):
@@ -91,15 +129,15 @@ def plot_centroid_map(results, save_path):
     print(f"Saved: {save_path}")
 
 
-def build_grid_predictions(model, inf_data, feature_names):
+def build_grid_predictions(model, latest_data, feature_names, feature_cols):
     """Predict on a dense grid using nearest-centroid interpolation."""
     lat_range = np.arange(-25.0, -9.5, 0.05)
     lon_range = np.arange(142.0, 154.0, 0.05)
 
-    centroid_coords = np.column_stack([inf_data["centroid_lat"], inf_data["centroid_lon"]])
+    centroid_coords = np.column_stack([latest_data["centroid_lat"], latest_data["centroid_lon"]])
     tree = cKDTree(centroid_coords)
 
-    X_seq_centroids = inf_data["X"]
+    X_seq_centroids = latest_data["X"]
     lon_grid, lat_grid = np.meshgrid(lon_range, lat_range)
     grid_points = np.column_stack([lat_grid.ravel(), lon_grid.ravel()])
 
@@ -114,21 +152,18 @@ def build_grid_predictions(model, inf_data, feature_names):
     valid_points = grid_points[valid_mask]
 
     X_seq_grid = X_seq_centroids[valid_indices]
-    meta_grid = np.column_stack([
-        valid_points[:, 0], valid_points[:, 1],
-        np.full(len(valid_points), 2026.0),
-        np.full(len(valid_points), 4.0),
-    ])
-
     flat = {}
     for w in range(16):
         for i, fname in enumerate(feature_names):
             flat[f"{fname}_week{w:02d}"] = X_seq_grid[:, w, i]
-    flat["latitude"] = meta_grid[:, 0]
-    flat["longitude"] = meta_grid[:, 1]
-    flat["year"] = meta_grid[:, 2]
-    flat["month"] = meta_grid[:, 3]
+    flat["latitude"] = valid_points[:, 0]
+    flat["longitude"] = valid_points[:, 1]
+    flat["month"] = np.full(len(valid_points), 4.0)
     X_grid_flat = pd.DataFrame(flat).fillna(0)
+    missing_cols = set(feature_cols) - set(X_grid_flat.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required feature columns: {sorted(missing_cols)}")
+    X_grid_flat = X_grid_flat[feature_cols]
 
     y_pred = model.predict(X_grid_flat)
     y_proba = model.predict_proba(X_grid_flat)
@@ -208,16 +243,26 @@ def main():
 
     with open(RESULTS_DIR / "model_config.json") as f:
         config = json.load(f)
+    feature_cols = config["feature_columns"]
+    if "year" in feature_cols:
+        raise ValueError(
+            "Loaded model_config still includes 'year' as a feature. "
+            "Retrain with final/train_final.py to produce year-free artifacts."
+        )
 
-    inf_data = np.load(INFERENCE_PATH, allow_pickle=True)
-    feature_names = list(inf_data["feature_names"])
+    all_weeks_path = _resolve_all_weeks_path()
+    inf_data = np.load(all_weeks_path, allow_pickle=True)
+    latest_data, latest_date = _latest_week_slice(inf_data)
+    feature_names = list(latest_data["feature_names"])
+    print(f"Using latest weekly snapshot: {pd.Timestamp(latest_date).strftime('%Y-%m-%d')}")
+    print(f"Source: {all_weeks_path}")
 
     print("Map 1: Centroid predictions...")
     plot_centroid_map(results, RESULTS_DIR / "gbr_centroid_map.png")
 
     print("\nMap 2: Grid heatmap...")
     lat_grid, lon_grid, grid_points, valid_mask, y_pred, y_proba = \
-        build_grid_predictions(model, inf_data, feature_names)
+        build_grid_predictions(model, latest_data, feature_names, feature_cols)
     plot_grid_heatmap(lat_grid, lon_grid, grid_points, valid_mask, y_pred,
                       RESULTS_DIR / "gbr_grid_heatmap.png")
 

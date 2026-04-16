@@ -1,0 +1,26 @@
+{
+  "input_npz": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/datasets/crw_gbr_sequences_reduced_16_centroids_all_weeks.npz",
+  "checkpoint": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/trained_model/best_model.pt",
+  "num_samples": 6916,
+  "class_names": [
+    "None (0%)",
+    "Moderate (1-50%)",
+    "Severe (>50%)"
+  ],
+  "predicted_counts": {
+    "None (0%)": 2504,
+    "Moderate (1-50%)": 1486,
+    "Severe (>50%)": 2926
+  },
+  "predicted_percent": {
+    "None (0%)": 36.2058993637941,
+    "Moderate (1-50%)": 21.486408328513594,
+    "Severe (>50%)": 42.30769230769231
+  },
+  "location_source": "meta lat/lon",
+  "feature_norm_source": "stats file (/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/trained_model/normalization_stats.npz)",
+  "static_norm_source": "stats file (/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/trained_model/normalization_stats.npz)",
+  "temporal_mode": true,
+  "num_weeks": 52,
+  "latest_date": "2026-04-12"
+}

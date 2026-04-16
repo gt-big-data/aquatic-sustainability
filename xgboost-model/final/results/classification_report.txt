@@ -2,13 +2,13 @@ FINAL 3-CLASS MODEL -- TEST SET
 ============================================================
                   precision    recall  f1-score   support
 
-       None (0%)      0.907     0.900     0.903      2491
-Moderate (1-50%)      0.783     0.745     0.764      1497
-   Severe (>50%)      0.551     0.720     0.624       293
+       None (0%)      0.906     0.897     0.901      2491
+Moderate (1-50%)      0.775     0.758     0.766      1497
+   Severe (>50%)      0.536     0.638     0.583       293
 
-        accuracy                          0.833      4281
-       macro avg      0.747     0.788     0.764      4281
-    weighted avg      0.839     0.833     0.835      4281
+        accuracy                          0.831      4281
+       macro avg      0.739     0.764     0.750      4281
+    weighted avg      0.834     0.831     0.832      4281
 
-Macro F1: 0.7636
-Weighted F1: 0.8352
+Macro F1: 0.7500
+Weighted F1: 0.8322

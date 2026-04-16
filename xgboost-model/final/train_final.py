@@ -1,6 +1,6 @@
 """
-Train final 3-class XGBoost model with raw weekly flattening (68 features).
-Best configuration from ablation experiments.
+Train final 3-class XGBoost model with raw weekly flattening (67 features).
+Best configuration from ablation experiments, excluding year as a predictor.
 """
 
 import json
@@ -23,14 +23,13 @@ N_CLASSES = 3
 
 
 def flatten_raw(X_seq, meta, feature_names):
-    """Raw weekly flattening: 16 weeks x 4 features + 4 metadata = 68 features."""
+    """Raw weekly flattening: 16 weeks x 4 features + 3 metadata = 67 features."""
     flat = {}
     for w in range(X_seq.shape[1]):
         for i, fname in enumerate(feature_names):
             flat[f"{fname}_week{w:02d}"] = X_seq[:, w, i]
     flat["latitude"] = meta[:, 0]
     flat["longitude"] = meta[:, 1]
-    flat["year"] = meta[:, 2]
     flat["month"] = meta[:, 3]
     return pd.DataFrame(flat).fillna(0)
 
@@ -121,9 +120,10 @@ def main():
         "class_labels": CLASS_LABELS,
         "n_classes": N_CLASSES,
         "bin_edges": [0, 1, 50, 100],
-        "flattening": "raw_weekly",
+        "flattening": "raw_weekly_no_year",
         "n_features": len(FEATURE_COLS),
         "feature_columns": FEATURE_COLS,
+        "excluded_features": ["year"],
         "macro_f1": round(macro_f1, 4),
         "weighted_f1": round(weighted_f1, 4),
         "hyperparameters": {

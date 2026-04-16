@@ -5,7 +5,7 @@ sequences_reduced_16.npz structure.
 
 Output keys:
   - X: (N, lookback_weeks, 4) where features are
-       [FilledSST, TSA, TSA_DHW, TSA_Frequency]
+       [FilledSST, SSTA, TSA, TSA_DHW]
   - y: (N,) placeholder labels (-1, unlabeled inference data)
   - meta: (N, 4) -> [lat, lon, year, month] for sequence end week
   - end_time: (N,) exact sequence end timestamp (weekly)
@@ -13,22 +13,24 @@ Output keys:
   - bleach_bins
 
 Data mapping from CRW files:
-  - FilledSST    <- analysed_sst
-  - TSA          <- hotspot
-  - TSA_DHW      <- degree_heating_week
-  - TSA_Frequency <- rolling 52-week count of weekly TSA >= 1.0
+  - FilledSST <- crw_sst / analysed_sst (converted from degree_C to Kelvin)
+  - SSTA      <- crw_sstanomaly / sea_surface_temperature_anomaly
+  - TSA       <- crw_hotspot / hotspot (clipped to >= 0)
+  - TSA_DHW   <- crw_dhw / degree_heating_week
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 
 import numpy as np
 import xarray as xr
 
 
-TARGET_FEATURES = ["FilledSST", "TSA", "TSA_DHW", "TSA_Frequency"]
+CANONICAL_FEATURES = ["filled_sst", "ssta", "tsa", "tsa_dhw"]
+DEFAULT_OUTPUT_FEATURE_NAMES = ["FilledSST", "SSTA", "TSA", "TSA_DHW"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-dir",
         default="crw_gbr_nc_yearly",
-        help="Root directory containing sst/hotspot/dhw subfolders with .nc files.",
+        help="Root directory containing sst/sst_anomaly/hotspot/dhw subfolders with .nc files.",
     )
     parser.add_argument(
         "--output-path",
@@ -48,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reference-path",
         default="datasets/sequences_reduced_16.npz",
-        help="Reference NPZ for lookback length and bleach_bins.",
+        help="Reference NPZ for lookback length, bleach_bins, and optional feature_names.",
     )
     parser.add_argument(
         "--lookback-weeks",
@@ -70,14 +72,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tsa-threshold",
         type=float,
-        default=1.0,
-        help="Threshold for TSA_Frequency indicator (TSA >= threshold).",
+        default=0.0,
+        help="Lower clip bound for TSA (hotspot), default 0.0.",
     )
     parser.add_argument(
         "--rolling-weeks",
         type=int,
         default=52,
-        help="Rolling window size for TSA_Frequency (default: 52).",
+        help="Deprecated (unused). Retained for CLI compatibility.",
     )
     parser.add_argument(
         "--drop-all-nan-sites",
@@ -99,22 +101,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_var_from_monthlies(files: list[Path], var_name: str) -> xr.DataArray:
+def load_var_from_monthlies(files: list[Path], var_names: list[str]) -> tuple[xr.DataArray, str]:
     if not files:
-        raise FileNotFoundError(f"No files found for variable '{var_name}'")
+        raise FileNotFoundError(f"No files found for variable candidates {var_names}")
 
     arrays = []
+    resolved_name: str | None = None
     for fp in files:
         ds = xr.open_dataset(fp)
-        if var_name not in ds:
-            raise KeyError(f"Variable '{var_name}' not found in {fp}")
-        da = ds[var_name]
+        found_name = next((name for name in var_names if name in ds), None)
+        if found_name is None:
+            available = list(ds.data_vars)
+            raise KeyError(
+                f"None of variables {var_names} found in {fp}. Available data vars: {available}"
+            )
+        if resolved_name is None:
+            resolved_name = found_name
+        da = ds[found_name]
         arrays.append(da)
 
     out = xr.concat(arrays, dim="time").sortby("time")
     _, unique_idx = np.unique(out["time"].values, return_index=True)
     out = out.isel(time=np.sort(unique_idx))
-    return out
+    if resolved_name is None:
+        raise RuntimeError(f"Could not resolve variable from candidates: {var_names}")
+    return out, resolved_name
 
 
 def resample_weekly(da: xr.DataArray, freq: str, agg: str) -> xr.DataArray:
@@ -123,6 +134,51 @@ def resample_weekly(da: xr.DataArray, freq: str, agg: str) -> xr.DataArray:
     if agg == "max":
         return da.resample(time=freq).max(skipna=True)
     raise ValueError(f"Unsupported agg: {agg}")
+
+
+def find_product_files(input_dir: Path, subdirs: list[str]) -> tuple[list[Path], str | None]:
+    for sub in subdirs:
+        files = sorted((input_dir / sub).glob("*.nc"))
+        if files:
+            return files, sub
+    return [], None
+
+
+def normalize_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def resolve_output_feature_names(ref: np.lib.npyio.NpzFile) -> list[str]:
+    if "feature_names" not in ref.files:
+        return DEFAULT_OUTPUT_FEATURE_NAMES
+
+    ref_names = [str(x) for x in np.asarray(ref["feature_names"]).reshape(-1).tolist()]
+    if len(ref_names) != 4:
+        return DEFAULT_OUTPUT_FEATURE_NAMES
+
+    expected = [normalize_name(x) for x in CANONICAL_FEATURES]
+    got = [normalize_name(x) for x in ref_names]
+    if got == expected:
+        return ref_names
+    return DEFAULT_OUTPUT_FEATURE_NAMES
+
+
+def maybe_celsius_to_kelvin(da: xr.DataArray) -> tuple[xr.DataArray, str]:
+    units = str(da.attrs.get("units", "")).strip().lower()
+    looks_kelvin = ("kelvin" in units) or units == "k"
+    looks_celsius = any(token in units for token in ["degree_c", "degrees_c", "celsius", "degc"])
+
+    sample_mean = float(da.isel(time=slice(0, min(8, da.sizes["time"]))).mean(skipna=True).values)
+    if looks_kelvin or sample_mean > 200.0:
+        return da, "already_kelvin"
+
+    if looks_celsius or sample_mean < 120.0:
+        out = (da + np.float32(273.15)).astype(np.float32)
+        out.attrs = dict(da.attrs)
+        out.attrs["units"] = "kelvin"
+        return out, "converted_celsius_to_kelvin"
+
+    return da, "left_unchanged"
 
 
 def forward_fill_over_time(arr: np.ndarray) -> np.ndarray:
@@ -156,33 +212,47 @@ def main() -> None:
     if "X" not in ref.files:
         raise KeyError(f"Reference file missing X: {ref_path}")
     lookback = args.lookback_weeks if args.lookback_weeks > 0 else int(ref["X"].shape[1])
+    output_feature_names = resolve_output_feature_names(ref)
     bleach_bins = ref["bleach_bins"] if "bleach_bins" in ref.files else np.array(
         [-1, 1, 50, 100], dtype=np.float32
     )
 
-    sst_files = sorted((input_dir / "sst").glob("*.nc"))
-    hotspot_files = sorted((input_dir / "hotspot").glob("*.nc"))
-    dhw_files = sorted((input_dir / "dhw").glob("*.nc"))
+    sst_files, sst_dir = find_product_files(input_dir, ["sst", "crw_sst"])
+    ssta_files, ssta_dir = find_product_files(
+        input_dir, ["sst_anomaly", "sstanomaly", "ssta", "crw_sstanomaly"]
+    )
+    hotspot_files, hotspot_dir = find_product_files(input_dir, ["hotspot", "crw_hotspot"])
+    dhw_files, dhw_dir = find_product_files(input_dir, ["dhw", "crw_dhw"])
 
-    if not (sst_files and hotspot_files and dhw_files):
+    if not (sst_files and ssta_files and hotspot_files and dhw_files):
         raise FileNotFoundError(
-            "Missing product files. Expected .nc files under input_dir/{sst,hotspot,dhw}."
+            "Missing product files. Expected .nc files under "
+            "input_dir/{sst, sst_anomaly, hotspot, dhw} (or alias dirs)."
         )
 
     print("=" * 70)
     print("Loading daily CRW files")
     print("=" * 70)
     print(f"Input dir: {input_dir}")
-    print(f"SST files: {len(sst_files)}")
-    print(f"Hotspot files: {len(hotspot_files)}")
-    print(f"DHW files: {len(dhw_files)}")
+    print(f"SST files: {len(sst_files)} (dir='{sst_dir}')")
+    print(f"SSTA files: {len(ssta_files)} (dir='{ssta_dir}')")
+    print(f"Hotspot files: {len(hotspot_files)} (dir='{hotspot_dir}')")
+    print(f"DHW files: {len(dhw_files)} (dir='{dhw_dir}')")
 
-    sst_daily = load_var_from_monthlies(sst_files, "analysed_sst")
-    hotspot_daily = load_var_from_monthlies(hotspot_files, "hotspot")
-    dhw_daily = load_var_from_monthlies(dhw_files, "degree_heating_week")
+    sst_daily, sst_var = load_var_from_monthlies(
+        sst_files, ["crw_sst", "analysed_sst", "sea_surface_temperature"]
+    )
+    ssta_daily, ssta_var = load_var_from_monthlies(
+        ssta_files, ["crw_sstanomaly", "sea_surface_temperature_anomaly", "sst_anomaly", "ssta"]
+    )
+    hotspot_daily, hotspot_var = load_var_from_monthlies(hotspot_files, ["crw_hotspot", "hotspot"])
+    dhw_daily, dhw_var = load_var_from_monthlies(
+        dhw_files, ["crw_dhw", "degree_heating_week", "dhw"]
+    )
+    print(f"Resolved vars: sst='{sst_var}', ssta='{ssta_var}', hotspot='{hotspot_var}', dhw='{dhw_var}'")
 
-    sst_daily, hotspot_daily, dhw_daily = xr.align(
-        sst_daily, hotspot_daily, dhw_daily, join="inner"
+    sst_daily, ssta_daily, hotspot_daily, dhw_daily = xr.align(
+        sst_daily, ssta_daily, hotspot_daily, dhw_daily, join="inner"
     )
     print(f"Daily aligned shape: {sst_daily.shape} (time, lat, lon)")
     print(
@@ -190,21 +260,25 @@ def main() -> None:
         f"{str(np.datetime64(sst_daily.time.values[-1]))}"
     )
 
+    sst_daily, sst_conversion = maybe_celsius_to_kelvin(sst_daily)
+    hotspot_daily = hotspot_daily.clip(min=args.tsa_threshold)
+    print(f"SST unit normalization: {sst_conversion}")
+    print(f"TSA clipping: hotspot >= {args.tsa_threshold}")
+
     print("\nConverting daily data to weekly...")
     sst_w = resample_weekly(sst_daily, args.week_freq, args.agg)
+    ssta_w = resample_weekly(ssta_daily, args.week_freq, args.agg)
     tsa_w = resample_weekly(hotspot_daily, args.week_freq, args.agg)
     dhw_w = resample_weekly(dhw_daily, args.week_freq, args.agg)
 
-    sst_w, tsa_w, dhw_w = xr.align(sst_w, tsa_w, dhw_w, join="inner")
-    tsa_indicator = (tsa_w >= args.tsa_threshold).astype(np.float32)
-    tsa_freq_w = tsa_indicator.rolling(time=args.rolling_weeks, min_periods=1).sum()
+    sst_w, ssta_w, tsa_w, dhw_w = xr.align(sst_w, ssta_w, tsa_w, dhw_w, join="inner")
 
     weekly = xr.Dataset(
         {
-            "FilledSST": sst_w.astype(np.float32),
-            "TSA": tsa_w.astype(np.float32),
-            "TSA_DHW": dhw_w.astype(np.float32),
-            "TSA_Frequency": tsa_freq_w.astype(np.float32),
+            "filled_sst": sst_w.astype(np.float32),
+            "ssta": ssta_w.astype(np.float32),
+            "tsa": tsa_w.astype(np.float32),
+            "tsa_dhw": dhw_w.astype(np.float32),
         }
     )
 
@@ -229,7 +303,7 @@ def main() -> None:
         )
 
     print("\nStacking features and building rolling sequences...")
-    feat_arr = np.stack([weekly[f].values for f in TARGET_FEATURES], axis=-1).astype(np.float32)
+    feat_arr = np.stack([weekly[f].values for f in CANONICAL_FEATURES], axis=-1).astype(np.float32)
     # (T, lat, lon, F) -> (T, S, F)
     T, nlat, nlon, F = feat_arr.shape
     feat_arr = feat_arr.reshape(T, nlat * nlon, F)
@@ -295,7 +369,7 @@ def main() -> None:
         y=y,
         meta=meta,
         end_time=end_time,
-        feature_names=np.array(TARGET_FEATURES, dtype=object),
+        feature_names=np.array(output_feature_names, dtype=object),
         bleach_bins=bleach_bins,
     )
 
@@ -307,7 +381,7 @@ def main() -> None:
     print(f"y shape: {y.shape} (all -1 for unlabeled data)")
     print(f"meta shape: {meta.shape}")
     print(f"end_time shape: {end_time.shape}")
-    print(f"feature_names: {TARGET_FEATURES}")
+    print(f"feature_names: {output_feature_names}")
 
 
 if __name__ == "__main__":

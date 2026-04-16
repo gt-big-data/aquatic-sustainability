@@ -14,12 +14,20 @@ import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+
+try:
+    import imageio.v2 as imageio
+
+    HAS_IMAGEIO = True
+except Exception:
+    HAS_IMAGEIO = False
 
 
 class TemporalAttention(nn.Module):
@@ -147,6 +155,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lon-min", type=float, default=142.0)
     parser.add_argument("--lon-max", type=float, default=154.0)
     parser.add_argument("--dpi", type=int, default=180)
+    parser.add_argument(
+        "--skip-temporal-viz",
+        action="store_true",
+        help="Skip temporal visualization outputs for multi-week centroid inputs.",
+    )
+    parser.add_argument(
+        "--write-temporal-gif",
+        action="store_true",
+        help="Also write weekly_evolution.gif for temporal inputs (requires imageio).",
+    )
     return parser.parse_args()
 
 
@@ -275,6 +293,320 @@ def load_normalization_stats(
     return feat_mean, feat_std, static_mean[:2], static_std[:2], f"stats file ({stats_file})"
 
 
+def normalize_name(name: str) -> str:
+    return "".join(ch for ch in str(name).lower() if ch.isalnum())
+
+
+def find_feature_idx(feature_names: list[str], candidates: list[str]) -> int | None:
+    norm_names = [normalize_name(n) for n in feature_names]
+    for cand in candidates:
+        key = normalize_name(cand)
+        if key in norm_names:
+            return norm_names.index(key)
+    return None
+
+
+def temporal_mode_available(data: np.lib.npyio.NpzFile) -> bool:
+    if "end_time" not in data.files:
+        return False
+    if "cluster_id" not in data.files:
+        return False
+    unique_end_times = np.unique(data["end_time"].astype("datetime64[ns]"))
+    return len(unique_end_times) > 1
+
+
+def build_temporal_predictions_df(
+    data: np.lib.npyio.NpzFile,
+    X: np.ndarray,
+    preds: np.ndarray,
+    probs: np.ndarray,
+    class_names: list[str],
+) -> pd.DataFrame:
+    if probs.shape[1] != 3:
+        raise ValueError(
+            "Temporal CSV format requires 3-class probabilities to match "
+            "gbr_predictions_temporal.csv."
+        )
+
+    end_time = data["end_time"].astype("datetime64[ns]")
+    unique_dates = np.sort(np.unique(end_time))
+    week_lookup = {ts: i + 1 for i, ts in enumerate(unique_dates)}
+    week_num = np.array([week_lookup[ts] for ts in end_time], dtype=np.int64)
+    date_str = pd.to_datetime(end_time).strftime("%Y-%m-%d")
+
+    if "centroid_lat" in data.files and "centroid_lon" in data.files:
+        centroid_lat = data["centroid_lat"].astype(np.float64)
+        centroid_lon = data["centroid_lon"].astype(np.float64)
+    else:
+        centroid_lat = data["meta"][:, 0].astype(np.float64)
+        centroid_lon = data["meta"][:, 1].astype(np.float64)
+
+    n_records = (
+        data["cluster_n_records"].astype(np.float64)
+        if "cluster_n_records" in data.files
+        else np.full((len(preds),), np.nan, dtype=np.float64)
+    )
+    match_distance = (
+        data["centroid_match_distance_km"].astype(np.float64)
+        if "centroid_match_distance_km" in data.files
+        else np.full((len(preds),), np.nan, dtype=np.float64)
+    )
+
+    feature_names = [str(x) for x in data["feature_names"].tolist()] if "feature_names" in data.files else []
+    dhw_idx = find_feature_idx(feature_names, ["tsa_dhw", "TSA_DHW", "crw_dhw"])
+    sst_idx = find_feature_idx(feature_names, ["filled_sst", "FilledSST", "crw_sst", "analysed_sst"])
+
+    if dhw_idx is None:
+        tsa_dhw_max = np.full((len(preds),), np.nan, dtype=np.float64)
+        tsa_dhw_last = np.full((len(preds),), np.nan, dtype=np.float64)
+    else:
+        tsa_dhw_max = X[:, :, dhw_idx].max(axis=1).astype(np.float64)
+        tsa_dhw_last = X[:, -1, dhw_idx].astype(np.float64)
+
+    if sst_idx is None:
+        filled_sst_last = np.full((len(preds),), np.nan, dtype=np.float64)
+    else:
+        filled_sst_last = X[:, -1, sst_idx].astype(np.float64)
+
+    out = pd.DataFrame(
+        {
+            "week": week_num,
+            "date": date_str,
+            "cluster_id": data["cluster_id"].astype(np.int64),
+            "centroid_lat": centroid_lat,
+            "centroid_lon": centroid_lon,
+            "n_records": n_records,
+            "match_distance_km": np.round(match_distance, 2),
+            "predicted_class": preds.astype(np.int64),
+            "predicted_label": [class_names[i] for i in preds.tolist()],
+            "prob_none": np.round(probs[:, 0], 4),
+            "prob_moderate": np.round(probs[:, 1], 4),
+            "prob_severe": np.round(probs[:, 2], 4),
+            "risk_score": np.round(1.0 - probs[:, 0], 4),
+            "TSA_DHW_max": tsa_dhw_max,
+            "TSA_DHW_last": tsa_dhw_last,
+            "FilledSST_last": filled_sst_last,
+        }
+    )
+    out = out.sort_values(["week", "cluster_id"]).reset_index(drop=True)
+    return out
+
+
+def monthly_tick_positions(dates: list[pd.Timestamp]) -> tuple[list[int], list[str]]:
+    ticks: list[int] = []
+    labels: list[str] = []
+    for i, d in enumerate(dates):
+        if d.day <= 7 or i == 0 or i == len(dates) - 1:
+            ticks.append(i)
+            labels.append(d.strftime("%b '%y"))
+    return ticks, labels
+
+
+def make_temporal_plots(
+    temporal_df: pd.DataFrame,
+    output_dir: Path,
+    class_names: list[str],
+    lat_min: float,
+    lat_max: float,
+    lon_min: float,
+    lon_max: float,
+    dpi: int,
+    write_gif: bool,
+) -> list[Path]:
+    saved: list[Path] = []
+    class_colors = {0: "#4393c3", 1: "#f4a582", 2: "#d6604d"}
+    class_order = [0, 1, 2]
+    legend_labels = class_names[:3]
+
+    by_week = {int(w): g.copy() for w, g in temporal_df.groupby("week")}
+    weeks = sorted(by_week.keys())
+    week_dates = [pd.to_datetime(by_week[w]["date"].iloc[0]) for w in weeks]
+    n_weeks = len(weeks)
+
+    # 1) multi-panel weekly evolution grid
+    sample_idx = np.linspace(0, n_weeks - 1, min(16, n_weeks), dtype=int)
+    fig, axes = plt.subplots(4, 4, figsize=(24, 20))
+    axes_flat = axes.flatten()
+    for panel_i, ax in enumerate(axes_flat):
+        if panel_i >= len(sample_idx):
+            ax.axis("off")
+            continue
+        week = weeks[int(sample_idx[panel_i])]
+        wk = by_week[week]
+        for c in class_order:
+            m = wk["predicted_class"].to_numpy() == c
+            if np.any(m):
+                ax.scatter(
+                    wk.loc[m, "centroid_lon"],
+                    wk.loc[m, "centroid_lat"],
+                    c=class_colors[c],
+                    s=15,
+                    alpha=0.85,
+                    edgecolors="none",
+                )
+        counts = np.bincount(wk["predicted_class"].to_numpy().astype(np.int64), minlength=3)
+        ax.text(
+            0.02,
+            0.02,
+            f"N:{counts[0]} M:{counts[1]} S:{counts[2]}",
+            transform=ax.transAxes,
+            fontsize=7,
+            bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
+        )
+        ax.set_xlim(lon_min, lon_max)
+        ax.set_ylim(lat_min, lat_max)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(week_dates[int(sample_idx[panel_i])].strftime("%b %d '%y"), fontsize=10, fontweight="bold")
+    legend_handles = [
+        mpatches.Patch(facecolor=class_colors[c], label=legend_labels[c]) for c in class_order
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=3, fontsize=12, bbox_to_anchor=(0.5, -0.01))
+    fig.suptitle(
+        "Bleaching Prediction Evolution Over Weeks\n"
+        f"{week_dates[0].strftime('%b %d, %Y')} -> {week_dates[-1].strftime('%b %d, %Y')}",
+        fontsize=16,
+        fontweight="bold",
+        y=1.01,
+    )
+    fig.tight_layout()
+    p1 = output_dir / "weekly_evolution_grid.png"
+    fig.savefig(p1, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    saved.append(p1)
+
+    # 2) stacked area chart
+    counts = []
+    for w in weeks:
+        arr = by_week[w]["predicted_class"].to_numpy().astype(np.int64)
+        counts.append(np.bincount(arr, minlength=3))
+    counts_arr = np.asarray(counts)
+    denom = counts_arr.sum(axis=1, keepdims=True)
+    denom[denom == 0] = 1
+    pct = counts_arr / denom * 100.0
+    x = np.arange(n_weeks)
+    fig, ax = plt.subplots(figsize=(16, 6))
+    ax.stackplot(
+        x,
+        pct[:, 0],
+        pct[:, 1],
+        pct[:, 2],
+        labels=legend_labels,
+        colors=[class_colors[0], class_colors[1], class_colors[2]],
+        alpha=0.85,
+    )
+    xt, xl = monthly_tick_positions(week_dates)
+    ax.set_xticks(xt)
+    ax.set_xticklabels(xl, rotation=45, ha="right", fontsize=9)
+    ax.set_ylim(0, 100)
+    ax.set_xlim(0, n_weeks - 1)
+    ax.set_ylabel("Percentage of Reef Clusters")
+    ax.set_xlabel("Date")
+    ax.set_title("Bleaching Severity Distribution Over Time", fontsize=14, fontweight="bold")
+    ax.legend(loc="upper left", fontsize=10)
+    fig.tight_layout()
+    p2 = output_dir / "weekly_stacked_area.png"
+    fig.savefig(p2, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    saved.append(p2)
+
+    # 3) risk heatmap (cluster x week)
+    cluster_meta = (
+        temporal_df.groupby("cluster_id", as_index=False)["centroid_lat"].first().sort_values("centroid_lat", ascending=False)
+    )
+    ordered_clusters = cluster_meta["cluster_id"].to_numpy()
+    risk_pivot = temporal_df.pivot(index="cluster_id", columns="week", values="risk_score")
+    risk_pivot = risk_pivot.reindex(index=ordered_clusters, columns=weeks)
+    fig, ax = plt.subplots(figsize=(20, 8))
+    im = ax.imshow(risk_pivot.to_numpy(dtype=np.float32), aspect="auto", cmap="RdYlBu_r", vmin=0.0, vmax=1.0)
+    xt, xl = monthly_tick_positions(week_dates)
+    ax.set_xticks(xt)
+    ax.set_xticklabels(xl, rotation=45, ha="right", fontsize=9)
+    yt = np.arange(0, len(ordered_clusters), max(1, len(ordered_clusters) // 9))
+    ax.set_yticks(yt)
+    lat_labels = cluster_meta["centroid_lat"].to_numpy()
+    ax.set_yticklabels([f"{lat_labels[i]:.1f}°" for i in yt], fontsize=8)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Reef Cluster (North -> South)")
+    ax.set_title("Bleaching Risk Score per Cluster Over Time", fontsize=13, fontweight="bold")
+    fig.colorbar(im, ax=ax, shrink=0.8, label="Risk Score (P(Moderate)+P(Severe))")
+    fig.tight_layout()
+    p3 = output_dir / "weekly_risk_heatmap.png"
+    fig.savefig(p3, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    saved.append(p3)
+
+    # 4) optional GIF
+    if write_gif:
+        if not HAS_IMAGEIO:
+            print("[warn] imageio unavailable; skipping weekly_evolution.gif")
+        else:
+            frames = []
+            for i, w in enumerate(weeks):
+                wk = by_week[w]
+                fig, ax = plt.subplots(figsize=(10, 8))
+                for c in class_order:
+                    m = wk["predicted_class"].to_numpy() == c
+                    if np.any(m):
+                        ax.scatter(
+                            wk.loc[m, "centroid_lon"],
+                            wk.loc[m, "centroid_lat"],
+                            c=class_colors[c],
+                            s=50,
+                            alpha=0.8,
+                            edgecolors="black",
+                            linewidth=0.3,
+                            label=f"{legend_labels[c]} ({int(np.sum(m))})",
+                        )
+                ax.set_xlim(lon_min, lon_max)
+                ax.set_ylim(lat_min, lat_max)
+                ax.set_xlabel("Longitude")
+                ax.set_ylabel("Latitude")
+                ax.set_title(week_dates[i].strftime("%B %d, %Y"), fontsize=14, fontweight="bold")
+                ax.legend(loc="lower left", fontsize=9)
+                ax.grid(alpha=0.3)
+                fig.tight_layout()
+                fig.canvas.draw()
+                # Use direct RGBA array view from canvas to avoid backend/DPI-dependent
+                # width/height mismatches when manually reshaping raw bytes.
+                rgba = np.asarray(fig.canvas.buffer_rgba())
+                if rgba.ndim != 3 or rgba.shape[2] != 4:
+                    raise RuntimeError(f"Unexpected canvas RGBA shape: {rgba.shape}")
+                frames.append(rgba[:, :, :3].copy())
+                plt.close(fig)
+            frames.extend([frames[-1]] * 5)
+            p4 = output_dir / "weekly_evolution.gif"
+            imageio.mimsave(p4, frames, duration=0.4)
+            saved.append(p4)
+
+    return saved
+
+
+def make_temporal_summary(temporal_df: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for week, wk in temporal_df.groupby("week"):
+        date = wk["date"].iloc[0]
+        arr = wk["predicted_class"].to_numpy().astype(np.int64)
+        counts = np.bincount(arr, minlength=3)
+        n = len(wk)
+        risk = wk["risk_score"].to_numpy(dtype=np.float64)
+        rows.append(
+            {
+                "week": int(week),
+                "date": str(date),
+                "n_none": int(counts[0]),
+                "n_moderate": int(counts[1]),
+                "n_severe": int(counts[2]),
+                "pct_none": round(float(counts[0] / n * 100.0), 1),
+                "pct_moderate": round(float(counts[1] / n * 100.0), 1),
+                "pct_severe": round(float(counts[2] / n * 100.0), 1),
+                "mean_risk_score": round(float(np.mean(risk)), 4),
+                "max_risk_score": round(float(np.max(risk)), 4),
+            }
+        )
+    return pd.DataFrame(rows).sort_values("week").reset_index(drop=True)
+
+
 def main() -> None:
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -368,6 +700,13 @@ def main() -> None:
 
     n_classes = probs.shape[1]
     class_names = class_names_for(n_classes)
+    temporal_mode = temporal_mode_available(data)
+    latest_mask = None
+    latest_date = None
+    if temporal_mode:
+        end_time_all = data["end_time"].astype("datetime64[ns]")
+        latest_date = np.max(end_time_all)
+        latest_mask = end_time_all == latest_date
 
     # Use centroid coordinates for map if requested and available.
     if args.use_centroid_coords and "centroid_lat" in data.files and "centroid_lon" in data.files:
@@ -424,6 +763,33 @@ def main() -> None:
         out_df[f"prob_class_{c}"] = probs[:, c]
     out_df.to_csv(out_csv, index=False)
 
+    temporal_csv = None
+    temporal_summary_csv = None
+    temporal_plot_paths: list[Path] = []
+    if temporal_mode:
+        temporal_df = build_temporal_predictions_df(data, X, preds, probs, class_names)
+        temporal_csv = output_dir / "gbr_predictions_temporal.csv"
+        temporal_df.to_csv(temporal_csv, index=False)
+
+        temporal_summary = make_temporal_summary(temporal_df)
+        temporal_summary_csv = output_dir / "weekly_summary.csv"
+        temporal_summary.to_csv(temporal_summary_csv, index=False)
+
+        if args.skip_temporal_viz:
+            print("[info] temporal visualizations skipped (--skip-temporal-viz)")
+        else:
+            temporal_plot_paths = make_temporal_plots(
+                temporal_df=temporal_df,
+                output_dir=output_dir,
+                class_names=class_names,
+                lat_min=args.lat_min,
+                lat_max=args.lat_max,
+                lon_min=args.lon_min,
+                lon_max=args.lon_max,
+                dpi=args.dpi,
+                write_gif=args.write_temporal_gif,
+            )
+
     # Summary JSON
     counts = np.bincount(preds, minlength=n_classes)
     summary = {
@@ -436,7 +802,11 @@ def main() -> None:
         "location_source": loc_source,
         "feature_norm_source": stats_src,
         "static_norm_source": stats_src,
+        "temporal_mode": bool(temporal_mode),
     }
+    if temporal_mode and latest_date is not None:
+        summary["num_weeks"] = int(len(np.unique(data["end_time"].astype("datetime64[ns]"))))
+        summary["latest_date"] = str(pd.Timestamp(latest_date).strftime("%Y-%m-%d"))
     out_json = output_dir / "inference_summary.json"
     out_json.write_text(json.dumps(summary, indent=2))
 
@@ -458,17 +828,30 @@ def main() -> None:
     else:
         print("[warn] no SST file found for coastline")
 
-    n_points = len(preds)
+    if temporal_mode and latest_mask is not None:
+        map_mask = latest_mask
+        map_preds = preds[map_mask]
+        map_lat = plot_lat[map_mask]
+        map_lon = plot_lon[map_mask]
+        map_suffix = f" (Latest Week: {pd.Timestamp(latest_date).strftime('%Y-%m-%d')})"
+    else:
+        map_mask = slice(None)
+        map_preds = preds
+        map_lat = plot_lat
+        map_lon = plot_lon
+        map_suffix = ""
+
+    n_points = len(map_preds)
     point_size = 18 if n_points <= 5000 else 6
     alpha = 0.9 if n_points <= 5000 else 0.5
     for c in range(n_classes):
-        m = preds == c
+        m = map_preds == c
         if not np.any(m):
             continue
         label = f"{class_names[c]} (n={int(np.sum(m))})"
         ax.scatter(
-            plot_lon[m],
-            plot_lat[m],
+            map_lon[m],
+            map_lat[m],
             s=point_size,
             c=[palette[c]],
             alpha=alpha,
@@ -481,7 +864,7 @@ def main() -> None:
     ax.set_ylim(args.lat_min, args.lat_max)
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
-    ax.set_title("Predicted Bleaching Severity")
+    ax.set_title(f"Predicted Bleaching Severity{map_suffix}")
     ax.grid(True, linestyle="--", alpha=0.35)
     ax.legend(loc="lower left", fontsize=8)
     fig.tight_layout()
@@ -492,6 +875,12 @@ def main() -> None:
     print(f"  {out_csv}")
     print(f"  {out_json}")
     print(f"  {out_png}")
+    if temporal_csv is not None:
+        print(f"  {temporal_csv}")
+    if temporal_summary_csv is not None:
+        print(f"  {temporal_summary_csv}")
+    for p in temporal_plot_paths:
+        print(f"  {p}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coral Bleaching · Aquatic Sustainability</title>
+<link rel="stylesheet" href="/static/css/styles.css" />
+<style>
+  :root {
+    --coral-none-color: #22c55e;
+    --coral-moderate-color: #f59e0b;
+    --coral-severe-color: #ef4444;
+    --coral-accent-color: #ec4899;
+  }
+
+  .filter-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    width: 320px;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    backdrop-filter: blur(10px);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+
+  .filter-overlay h3 {
+    margin: 0 0 8px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .filter-section {
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .filter-section:first-child {
+    padding-top: 0;
+    margin-top: 0;
+    border-top: none;
+  }
+
+  .filter-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .filter-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .filter-label {
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 36px;
+  }
+
+  .filter-slider {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    -webkit-appearance: none;
+  }
+
+  .filter-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--coral-accent-color);
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .filter-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--coral-accent-color);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .filter-value {
+    min-width: 58px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: right;
+    font-size: 12px;
+  }
+
+  .toggle-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    padding: 7px 10px;
+    border: 2px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .toggle-btn.active {
+    background: var(--coral-accent-color);
+    border-color: var(--coral-accent-color);
+    color: white;
+  }
+
+  .severity-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .severity-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .severity-check input {
+    accent-color: var(--coral-accent-color);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  .severity-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .swatch-none     { background: var(--coral-none-color); }
+  .swatch-moderate { background: var(--coral-moderate-color); }
+  .swatch-severe   { background: var(--coral-severe-color); }
+
+  .week-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-left: 8px;
+  }
+
+  .reset-btn {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .reset-btn:hover {
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .legend-gradient {
+    height: 10px;
+    border-radius: 4px;
+    width: 100%;
+  }
+
+  .legend-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .legend-caption {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .status-note {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: -2px;
+    margin-bottom: 4px;
+  }
+
+  #map {
+    width: 100%;
+    height: calc(100vh - 80px);
+  }
+
+  .coral-popup {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-width: 240px;
+    max-width: 300px;
+    padding: 4px 2px;
+    color: #111827;
+  }
+
+  .coral-popup .name {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .coral-popup .coords {
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 8px;
+  }
+
+  .coral-popup .week {
+    font-size: 11px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .coral-popup .badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+    border: 1px solid;
+  }
+
+  .coral-popup .prob-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  .coral-popup .prob-row .tag {
+    width: 70px;
+    color: #6b7280;
+  }
+
+  .coral-popup .prob-row .bar {
+    flex: 1;
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .coral-popup .prob-row .bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  .coral-popup .prob-row .val {
+    width: 44px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .coral-popup .metrics {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    font-size: 12px;
+  }
+
+  .coral-popup .metrics .label {
+    color: #6b7280;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .coral-popup .metrics .value {
+    font-weight: 600;
+  }
+
+  .coral-popup .footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    border-top: 1px solid #f3f4f6;
+    font-size: 10px;
+    color: #9ca3af;
+  }
+</style>
+</head>
+<body>
+<div data-navbar-root></div>
+
+<main class="workspace">
+<section class="map-panel" style="position: relative;">
+
+<div class="filter-overlay" id="filterOverlay">
+  <div class="filter-section">
+    <h3>Coral Bleaching</h3>
+    <div class="status-note" id="statusNote">Loading predictions…</div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-title">Week</div>
+    <div class="filter-row">
+      <input type="range" id="weekSlider" class="filter-slider" min="0" max="0" value="0" step="1" disabled />
+      <span class="week-label" id="weekLabel">—</span>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-title">Model</div>
+    <div class="toggle-buttons">
+      <button class="toggle-btn active" data-model="lstm">LSTM</button>
+      <button class="toggle-btn" data-model="xgboost">XGBoost</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-title">Color by</div>
+    <div class="toggle-buttons">
+      <button class="toggle-btn active" data-metric="risk_score">Risk</button>
+      <button class="toggle-btn" data-metric="tsa_dhw_last">DHW</button>
+      <button class="toggle-btn" data-metric="filled_sst_c">SST</button>
+    </div>
+    <div class="legend" style="margin-top: 10px;">
+      <div class="legend-gradient" id="legendGradient"></div>
+      <div class="legend-scale">
+        <span id="legendMin">–</span>
+        <span id="legendCaption" class="legend-caption">–</span>
+        <span id="legendMax">–</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-title">Severity</div>
+    <div class="severity-checks">
+      <label class="severity-check">
+        <input type="checkbox" data-severity="0" checked />
+        <span class="severity-swatch swatch-none"></span>
+        <span>None (0%)</span>
+      </label>
+      <label class="severity-check">
+        <input type="checkbox" data-severity="1" checked />
+        <span class="severity-swatch swatch-moderate"></span>
+        <span>Moderate (1–50%)</span>
+      </label>
+      <label class="severity-check">
+        <input type="checkbox" data-severity="2" checked />
+        <span class="severity-swatch swatch-severe"></span>
+        <span>Severe (&gt;50%)</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="filter-section" id="numericFilters">
+    <div class="filter-title">Metric filters</div>
+    <!-- filled dynamically -->
+  </div>
+
+  <div class="filter-section">
+    <button class="reset-btn" id="resetBtn">Reset filters</button>
+  </div>
+</div>
+
+<div id="map"></div>
+</section>
+</main>
+
+<script>
+  const METRIC_KEYS = ["risk_score", "tsa_dhw_last", "filled_sst_c"];
+
+  // Colormaps: three anchor colors interpolated in sRGB.
+  const COLORMAPS = {
+    risk_score:   [[255, 255, 255], [250, 204, 21],  [239, 68, 68]],   // white → yellow → red
+    tsa_dhw_last: [[255, 255, 255], [168, 85, 247],  [236, 72, 153]],  // white → purple → magenta
+    filled_sst_c: [[37, 99, 235],   [20, 184, 166],  [249, 115, 22]],  // blue → teal → orange
+  };
+
+  const SEVERITY_COLORS = ['var(--coral-none-color)', 'var(--coral-moderate-color)', 'var(--coral-severe-color)'];
+  const SEVERITY_HEX    = ['#22c55e', '#f59e0b', '#ef4444'];
+
+  const state = {
+    bundle: null,
+    weekIndex: 0,
+    model: 'lstm',
+    colorMetric: 'risk_score',
+    filters: {
+      risk_score:   { min: 0, max: 1 },
+      tsa_dhw_last: { min: 0, max: 1 },
+      filled_sst_c: { min: 0, max: 1 },
+      severities: { 0: true, 1: true, 2: true },
+    },
+    markers: [],
+    infoWindow: null,
+    openMarkerIndex: null,
+  };
+
+  let map = null;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function colorForMetric(metric, value) {
+    if (value === null || value === undefined || Number.isNaN(value)) return '#9ca3af';
+    const meta = state.bundle.metrics[metric];
+    const span = meta.max - meta.min;
+    let t = span > 0 ? (value - meta.min) / span : 0;
+    t = Math.max(0, Math.min(1, t));
+    const ramp = COLORMAPS[metric];
+    const mid = 0.5;
+    let c0, c1, localT;
+    if (t <= mid) { c0 = ramp[0]; c1 = ramp[1]; localT = t / mid; }
+    else          { c0 = ramp[1]; c1 = ramp[2]; localT = (t - mid) / (1 - mid); }
+    const r = Math.round(lerp(c0[0], c1[0], localT));
+    const g = Math.round(lerp(c0[1], c1[1], localT));
+    const b = Math.round(lerp(c0[2], c1[2], localT));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  function gradientCss(metric) {
+    const ramp = COLORMAPS[metric];
+    const rgb = c => `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+    return `linear-gradient(to right, ${rgb(ramp[0])}, ${rgb(ramp[1])}, ${rgb(ramp[2])})`;
+  }
+
+  function formatMetricValue(metric, value) {
+    if (value === null || value === undefined) return '—';
+    if (metric === 'risk_score')   return value.toFixed(2);
+    if (metric === 'tsa_dhw_last') return `${value.toFixed(1)} °C-wk`;
+    if (metric === 'filled_sst_c') return `${value.toFixed(1)} °C`;
+    return value.toString();
+  }
+
+  function buildCircleIcon(fillColor) {
+    return {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 7,
+      fillColor,
+      fillOpacity: 0.9,
+      strokeColor: '#0f172a',
+      strokeOpacity: 0.6,
+      strokeWeight: 1,
+    };
+  }
+
+  function buildNumericFilterUi() {
+    const container = document.getElementById('numericFilters');
+    const metrics = state.bundle.metrics;
+    let html = '<div class="filter-title">Metric filters</div>';
+    for (const key of METRIC_KEYS) {
+      const m = metrics[key];
+      const step = key === 'risk_score' ? 0.01 : 0.1;
+      html += `
+        <div style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 12px; font-weight: 600; color: var(--text);">${m.label}${m.unit ? ` (${m.unit})` : ''}</span>
+            <span style="font-size: 11px; color: var(--muted);" id="range-${key}">${m.min} – ${m.max}</span>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">Min</span>
+            <input type="range" class="filter-slider metric-min" data-metric="${key}"
+                   min="${m.min}" max="${m.max}" step="${step}" value="${m.min}" />
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">Max</span>
+            <input type="range" class="filter-slider metric-max" data-metric="${key}"
+                   min="${m.min}" max="${m.max}" step="${step}" value="${m.max}" />
+          </div>
+        </div>
+      `;
+    }
+    container.innerHTML = html;
+
+    for (const input of container.querySelectorAll('input.metric-min, input.metric-max')) {
+      input.addEventListener('input', () => {
+        const key = input.dataset.metric;
+        const isMin = input.classList.contains('metric-min');
+        const value = parseFloat(input.value);
+        const other = state.filters[key];
+        if (isMin) {
+          if (value > other.max) { input.value = other.max; return; }
+          other.min = value;
+        } else {
+          if (value < other.min) { input.value = other.min; return; }
+          other.max = value;
+        }
+        updateRangeLabel(key);
+        render();
+      });
+    }
+  }
+
+  function updateRangeLabel(key) {
+    const label = document.getElementById(`range-${key}`);
+    if (!label) return;
+    const f = state.filters[key];
+    const fmt = key === 'risk_score' ? v => v.toFixed(2) : v => v.toFixed(1);
+    label.textContent = `${fmt(f.min)} – ${fmt(f.max)}`;
+  }
+
+  function renderLegend() {
+    const metric = state.colorMetric;
+    const m = state.bundle.metrics[metric];
+    document.getElementById('legendGradient').style.background = gradientCss(metric);
+    document.getElementById('legendCaption').textContent = `${m.label}${m.unit ? ` (${m.unit})` : ''}`;
+    const fmt = metric === 'risk_score' ? v => v.toFixed(2) : v => v.toFixed(1);
+    document.getElementById('legendMin').textContent = fmt(m.min);
+    document.getElementById('legendMax').textContent = fmt(m.max);
+  }
+
+  function popupHtml(i, weekIdx) {
+    const bundle = state.bundle;
+    const c = bundle.centroids[i];
+    const model = bundle.models[state.model];
+    const cls = model.predicted_class[i][weekIdx];
+    const sevLabel = bundle.severity_labels[cls] || '—';
+    const sevHex = SEVERITY_HEX[cls] || '#6b7280';
+
+    const risk = model.risk_score[i][weekIdx];
+    const dhwL = model.tsa_dhw_last[i][weekIdx];
+    const dhwM = model.tsa_dhw_max[i][weekIdx];
+    const sst  = model.filled_sst_c[i][weekIdx];
+    const n    = model.n_records[i][weekIdx];
+    const pN   = model.prob_none[i][weekIdx]     ?? 0;
+    const pM   = model.prob_moderate[i][weekIdx] ?? 0;
+    const pS   = model.prob_severe[i][weekIdx]   ?? 0;
+
+    const probRow = (label, value, hex) => `
+      <div class="prob-row">
+        <span class="tag">${label}</span>
+        <span class="bar"><span style="width: ${(value * 100).toFixed(0)}%; background: ${hex};"></span></span>
+        <span class="val">${(value * 100).toFixed(1)}%</span>
+      </div>
+    `;
+
+    return `
+      <div class="coral-popup">
+        <div class="name">${c.name}</div>
+        <div class="coords">${c.lat.toFixed(3)}°, ${c.lon.toFixed(3)}° · cluster ${c.cluster_id}</div>
+        <div class="week">Week ${weekIdx + 1} · ${bundle.weeks[weekIdx]}</div>
+        <div class="badge" style="color: ${sevHex}; background: ${sevHex}22; border-color: ${sevHex}66;">${sevLabel}</div>
+        ${probRow('None',     pN, SEVERITY_HEX[0])}
+        ${probRow('Moderate', pM, SEVERITY_HEX[1])}
+        ${probRow('Severe',   pS, SEVERITY_HEX[2])}
+        <div class="metrics">
+          <div>
+            <div class="label">Risk Score</div>
+            <div class="value">${formatMetricValue('risk_score', risk)}</div>
+          </div>
+          <div>
+            <div class="label">DHW (last)</div>
+            <div class="value">${formatMetricValue('tsa_dhw_last', dhwL)}</div>
+          </div>
+          <div>
+            <div class="label">DHW (max)</div>
+            <div class="value">${formatMetricValue('tsa_dhw_last', dhwM)}</div>
+          </div>
+          <div>
+            <div class="label">SST</div>
+            <div class="value">${formatMetricValue('filled_sst_c', sst)}</div>
+          </div>
+          <div>
+            <div class="label">Samples (n)</div>
+            <div class="value">${n ?? '—'}</div>
+          </div>
+          <div>
+            <div class="label">Model</div>
+            <div class="value">${state.model.toUpperCase()}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function isVisible(i) {
+    const model = state.bundle.models[state.model];
+    const w = state.weekIndex;
+    const cls = model.predicted_class[i][w];
+    if (!state.filters.severities[cls]) return false;
+    for (const key of METRIC_KEYS) {
+      const v = model[key][i][w];
+      if (v === null || v === undefined) return false;
+      const f = state.filters[key];
+      if (v < f.min || v > f.max) return false;
+    }
+    return true;
+  }
+
+  function render() {
+    if (!state.bundle) return;
+    const model = state.bundle.models[state.model];
+    const metric = state.colorMetric;
+    for (let i = 0; i < state.markers.length; i++) {
+      const visible = isVisible(i);
+      const value = model[metric][i][state.weekIndex];
+      const color = colorForMetric(metric, value);
+      state.markers[i].setOptions({
+        icon: buildCircleIcon(color),
+        visible,
+      });
+    }
+    renderLegend();
+    document.getElementById('weekLabel').textContent = state.bundle.weeks[state.weekIndex];
+
+    // Auto-refresh an open popup so its numbers stay in sync.
+    if (state.openMarkerIndex !== null && state.infoWindow) {
+      const i = state.openMarkerIndex;
+      if (isVisible(i)) {
+        state.infoWindow.setContent(popupHtml(i, state.weekIndex));
+      } else {
+        state.infoWindow.close();
+        state.openMarkerIndex = null;
+      }
+    }
+  }
+
+  function wireControls() {
+    const weekSlider = document.getElementById('weekSlider');
+    weekSlider.max = state.bundle.weeks.length - 1;
+    weekSlider.disabled = false;
+    weekSlider.addEventListener('input', () => {
+      state.weekIndex = parseInt(weekSlider.value, 10);
+      render();
+    });
+
+    for (const btn of document.querySelectorAll('[data-model]')) {
+      btn.addEventListener('click', () => {
+        state.model = btn.dataset.model;
+        for (const b of document.querySelectorAll('[data-model]')) b.classList.toggle('active', b === btn);
+        render();
+      });
+    }
+
+    for (const btn of document.querySelectorAll('[data-metric]')) {
+      btn.addEventListener('click', () => {
+        state.colorMetric = btn.dataset.metric;
+        for (const b of document.querySelectorAll('[data-metric]')) b.classList.toggle('active', b === btn);
+        render();
+      });
+    }
+
+    for (const cb of document.querySelectorAll('[data-severity]')) {
+      cb.addEventListener('change', () => {
+        state.filters.severities[parseInt(cb.dataset.severity, 10)] = cb.checked;
+        render();
+      });
+    }
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      state.weekIndex = 0;
+      weekSlider.value = 0;
+      state.model = 'lstm';
+      state.colorMetric = 'risk_score';
+      for (const b of document.querySelectorAll('[data-model]'))  b.classList.toggle('active', b.dataset.model === 'lstm');
+      for (const b of document.querySelectorAll('[data-metric]')) b.classList.toggle('active', b.dataset.metric === 'risk_score');
+      for (const cb of document.querySelectorAll('[data-severity]')) {
+        cb.checked = true;
+        state.filters.severities[parseInt(cb.dataset.severity, 10)] = true;
+      }
+      for (const key of METRIC_KEYS) {
+        const m = state.bundle.metrics[key];
+        state.filters[key] = { min: m.min, max: m.max };
+        const minEl = document.querySelector(`input.metric-min[data-metric="${key}"]`);
+        const maxEl = document.querySelector(`input.metric-max[data-metric="${key}"]`);
+        if (minEl) minEl.value = m.min;
+        if (maxEl) maxEl.value = m.max;
+        updateRangeLabel(key);
+      }
+      render();
+    });
+  }
+
+  async function loadBundle() {
+    const res = await fetch('/api/coral-bleaching');
+    if (!res.ok) throw new Error(`API returned ${res.status}`);
+    return res.json();
+  }
+
+  async function initMap() {
+    try {
+      state.bundle = await loadBundle();
+    } catch (err) {
+      document.getElementById('statusNote').textContent = `Failed to load predictions: ${err.message}`;
+      return;
+    }
+
+    for (const key of METRIC_KEYS) {
+      const m = state.bundle.metrics[key];
+      state.filters[key] = { min: m.min, max: m.max };
+    }
+
+    const bbox = state.bundle.bbox;
+    map = new google.maps.Map(document.getElementById('map'), {
+      mapTypeId: 'hybrid',
+      center: { lat: (bbox.min_lat + bbox.max_lat) / 2, lng: (bbox.min_lon + bbox.max_lon) / 2 },
+      zoom: 6,
+    });
+    const bounds = new google.maps.LatLngBounds(
+      { lat: bbox.min_lat, lng: bbox.min_lon },
+      { lat: bbox.max_lat, lng: bbox.max_lon },
+    );
+    map.fitBounds(bounds, 60);
+
+    state.infoWindow = new google.maps.InfoWindow();
+    state.infoWindow.addListener('closeclick', () => { state.openMarkerIndex = null; });
+
+    state.markers = state.bundle.centroids.map((c, i) => {
+      const marker = new google.maps.Marker({
+        map,
+        position: { lat: c.lat, lng: c.lon },
+        icon: buildCircleIcon('#ffffff'),
+        title: c.name,
+      });
+      marker.addListener('click', () => {
+        state.openMarkerIndex = i;
+        state.infoWindow.setContent(popupHtml(i, state.weekIndex));
+        state.infoWindow.open(map, marker);
+      });
+      return marker;
+    });
+
+    map.addListener('click', () => {
+      if (state.infoWindow) state.infoWindow.close();
+      state.openMarkerIndex = null;
+    });
+
+    document.getElementById('statusNote').textContent =
+      `${state.bundle.centroids.length} reef centroids · ${state.bundle.weeks.length} weeks`;
+
+    buildNumericFilterUi();
+    wireControls();
+    render();
+  }
+
+  window.initMap = initMap;
+
+  fetch('/api/config/maps-key')
+    .then(res => res.json())
+    .then(data => {
+      const apiKey = data.googleMapsApiKey || 'DEMO_KEY';
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
+      script.async = true;
+      document.head.appendChild(script);
+    });
+</script>
+
+<script src="/static/js/components/navbar.js" defer></script>
+<script src="/static/js/main.js" defer></script>
+</body>
+</html>

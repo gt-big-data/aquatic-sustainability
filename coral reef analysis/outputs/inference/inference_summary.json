@@ -1,6 +1,6 @@
 {
   "input_npz": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/datasets/crw_gbr_sequences_reduced_16_latest_week_centroids.npz",
-  "checkpoint": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/best_model.pt",
+  "checkpoint": "/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/trained_model/best_model.pt",
   "num_samples": 133,
   "class_names": [
     "None (0%)",
@@ -8,16 +8,16 @@
     "Severe (>50%)"
   ],
   "predicted_counts": {
-    "None (0%)": 78,
-    "Moderate (1-50%)": 17,
-    "Severe (>50%)": 38
+    "None (0%)": 133,
+    "Moderate (1-50%)": 0,
+    "Severe (>50%)": 0
   },
   "predicted_percent": {
-    "None (0%)": 58.64661654135338,
-    "Moderate (1-50%)": 12.781954887218044,
-    "Severe (>50%)": 28.57142857142857
+    "None (0%)": 100.0,
+    "Moderate (1-50%)": 0.0,
+    "Severe (>50%)": 0.0
   },
   "location_source": "meta lat/lon",
-  "feature_norm_source": "inference-data estimated",
-  "static_norm_source": "inference-data estimated"
+  "feature_norm_source": "stats file (/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/trained_model/normalization_stats.npz)",
+  "static_norm_source": "stats file (/Users/dango/GaTech/Aquatic Sustainability/aquatic-sustainability/coral reef analysis/outputs/trained_model/normalization_stats.npz)"
 }
