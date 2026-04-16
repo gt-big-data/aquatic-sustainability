@@ -17,6 +17,13 @@ dump.rdb
 
 # SMAP & Model cache
 data/
+!data/
+data/*
+!data/coral_bleaching/
+data/coral_bleaching/*
+!data/coral_bleaching/gbr_predictions_temporal_lstm.csv
+!data/coral_bleaching/gbr_predictions_temporal_xgboost.csv
+!data/coral_bleaching/centroid_names.json
 *.npy
 *.h5
 # *.pt - commented out to allow model files to be committed
