@@ -10,6 +10,7 @@ Outputs:
   - weekly_risk_heatmap.png     — Heatmap: clusters × weeks, colored by risk
   - weekly_evolution.gif        — Animated GIF cycling through all 52 weeks
   - weekly_summary.csv          — Per-week counts, percentages, risk scores
+  - gbr_predictions_temporal.csv — Per-cluster predictions for every week (frontend-ready)
 """
 
 import json
@@ -89,6 +90,10 @@ def run_52week_inference(model, config, inf_data):
     week_dates = [pd.Timestamp(d) for d in unique_dates]
     weekly_predictions = []
     weekly_probabilities = []
+    weekly_prediction_rows = []
+    class_labels = config["class_labels"]
+    dhw_idx = feature_names.index("TSA_DHW") if "TSA_DHW" in feature_names else 2
+    sst_idx = feature_names.index("FilledSST") if "FilledSST" in feature_names else 0
 
     for wi, date in enumerate(unique_dates):
         mask = end_times == date
@@ -114,13 +119,48 @@ def run_52week_inference(model, config, inf_data):
         weekly_predictions.append(y_pred)
         weekly_probabilities.append(y_proba)
 
+        cluster_ids_week = inf_data["cluster_id"][mask]
+        centroid_lats_week = inf_data["centroid_lat"][mask]
+        centroid_lons_week = inf_data["centroid_lon"][mask]
+        n_records_week = (
+            inf_data["cluster_n_records"][mask]
+            if "cluster_n_records" in inf_data.files
+            else np.full(mask.sum(), np.nan)
+        )
+        match_distance_week = (
+            np.round(inf_data["centroid_match_distance_km"][mask], 2)
+            if "centroid_match_distance_km" in inf_data.files
+            else np.full(mask.sum(), np.nan)
+        )
+
+        weekly_results = pd.DataFrame({
+            "week": wi + 1,
+            "date": pd.Timestamp(date).strftime("%Y-%m-%d"),
+            "cluster_id": cluster_ids_week,
+            "centroid_lat": centroid_lats_week,
+            "centroid_lon": centroid_lons_week,
+            "n_records": n_records_week,
+            "match_distance_km": match_distance_week,
+            "predicted_class": y_pred,
+            "predicted_label": [class_labels[c] for c in y_pred],
+            "prob_none": np.round(y_proba[:, 0], 4),
+            "prob_moderate": np.round(y_proba[:, 1], 4),
+            "prob_severe": np.round(y_proba[:, 2], 4),
+            "risk_score": np.round(1.0 - y_proba[:, 0], 4),
+            "TSA_DHW_max": X_seq[:, :, dhw_idx].max(axis=1),
+            "TSA_DHW_last": X_seq[:, 15, dhw_idx],
+            "FilledSST_last": X_seq[:, 15, sst_idx],
+        })
+        weekly_prediction_rows.append(weekly_results)
+
         counts = np.bincount(y_pred.astype(int), minlength=3)
         date_str = pd.Timestamp(date).strftime("%Y-%m-%d")
         if wi % 4 == 0 or wi == n_weeks - 1:
             print(f"  Week {wi+1:2d} ({date_str}): None={counts[0]:3d}, "
                   f"Moderate={counts[1]:3d}, Severe={counts[2]:3d}")
 
-    return weekly_predictions, weekly_probabilities, week_dates, centroid_lats, centroid_lons
+    temporal_predictions = pd.concat(weekly_prediction_rows, ignore_index=True)
+    return weekly_predictions, weekly_probabilities, week_dates, centroid_lats, centroid_lons, temporal_predictions
 
 
 def plot_evolution_grid(weekly_predictions, week_dates, centroid_lats, centroid_lons, save_path):
@@ -342,12 +382,19 @@ def save_summary_csv(weekly_predictions, weekly_probabilities, week_dates, n_clu
     print(df.to_string(index=False))
 
 
+def save_temporal_predictions_csv(temporal_predictions, save_path):
+    """Save per-cluster predictions for each weekly snapshot."""
+    temporal_predictions = temporal_predictions.sort_values(["date", "cluster_id"]).reset_index(drop=True)
+    temporal_predictions.to_csv(save_path, index=False)
+    print(f"Saved: {save_path}")
+
+
 def main():
     model, config, inf_data = load_data()
 
     print(f"Loaded 52-week inference data from {ALL_WEEKS_PATH.name}\n")
 
-    weekly_predictions, weekly_probabilities, week_dates, centroid_lats, centroid_lons = \
+    weekly_predictions, weekly_probabilities, week_dates, centroid_lats, centroid_lons, temporal_predictions = \
         run_52week_inference(model, config, inf_data)
 
     n_clusters = len(centroid_lats)
@@ -367,6 +414,9 @@ def main():
 
     save_summary_csv(weekly_predictions, weekly_probabilities, week_dates, n_clusters,
                      RESULTS_DIR / "weekly_summary.csv")
+
+    save_temporal_predictions_csv(temporal_predictions,
+                                  RESULTS_DIR / "gbr_predictions_temporal.csv")
 
     print("\nAll temporal visualizations saved to results/")
 
