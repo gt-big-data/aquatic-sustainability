@@ -8,6 +8,7 @@ from flask_cors import cross_origin
 from rq.job import Job
 
 from . import supabase
+from .coral_bleaching_loader import get_bundle as get_coral_bleaching_bundle
 from .tasks import run_flood_job
 import random
 
@@ -231,6 +232,18 @@ def maps_key():
     """Provide the Google Maps API key to frontend."""
     key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
     return {"googleMapsApiKey": key}
+
+@bp.route("/coral-bleaching", methods=["GET"])
+def get_coral_bleaching():
+    """Return the factored coral bleaching prediction bundle (LSTM + XGBoost)."""
+    try:
+        bundle = get_coral_bleaching_bundle()
+    except Exception:
+        current_app.logger.exception("Failed to build coral bleaching bundle")
+        return jsonify({"error": "failed to load coral bleaching data"}), 500
+    response = jsonify(bundle)
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
 
 @bp.route('/register', methods=['POST'])
 @cross_origin(origins="https://aquatic-sustainability-834508815183.us-east1.run.app/", methods=["POST", "OPTIONS"])
