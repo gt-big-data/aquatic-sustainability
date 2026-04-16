@@ -10,7 +10,6 @@ from rq.job import Job
 
 from . import supabase
 from .tasks import run_flood_job
-import random
 
 bp = Blueprint("api", __name__)
 # app/routes.py
@@ -257,102 +256,14 @@ def get_flood_risk(job_id):
 
 @bp.route("/coral-bleaching", methods=["GET"])
 def coral_bleaching():
-    """
-    Return a placeholder coral-bleaching prediction bundle for SE Asian reef sites.
-    Shape contract:
-      centroids: list of { lat, lon, name, cluster_id }
-      weeks: list of ISO week strings (n_weeks)
-      metrics: { key: { min, max, label, unit } }
-      severity_labels: { "0": str, "1": str, "2": str }
-      models: { lstm: { predicted_class, risk_score, tsa_dhw_last, tsa_dhw_max,
-                        filled_sst_c, n_records,
-                        prob_none, prob_moderate, prob_severe } }
-      All per-centroid arrays have shape [n_centroids][n_weeks].
-    """
-    rng = random.Random(42)
-
-    centroids = [
-        {"lat": 8.72,   "lon": 126.06, "name": "Tubbataha Reef",      "cluster_id": 0},
-        {"lat": -8.50,  "lon": 119.55, "name": "Komodo Reef",          "cluster_id": 1},
-        {"lat": 4.19,   "lon": 114.50, "name": "Semporna Reef",         "cluster_id": 2},
-        {"lat": 9.87,   "lon": 124.14, "name": "Bohol Sea Reef",        "cluster_id": 3},
-        {"lat": -1.47,  "lon": 130.80, "name": "Raja Ampat Reef",       "cluster_id": 4},
-        {"lat": 6.85,   "lon": 116.95, "name": "Sipadan Reef",          "cluster_id": 5},
-        {"lat": 14.95,  "lon": 119.92, "name": "Hundred Islands Reef",  "cluster_id": 6},
-        {"lat": -8.75,  "lon": 115.18, "name": "Bali Reef",             "cluster_id": 7},
-        {"lat": 3.55,   "lon": 103.43, "name": "Tioman Island Reef",    "cluster_id": 8},
-        {"lat": 11.57,  "lon": 103.15, "name": "Koh Tao Reef",          "cluster_id": 9},
-        {"lat": 7.78,   "lon": 98.30,  "name": "Similan Islands Reef",  "cluster_id": 10},
-        {"lat": -5.47,  "lon": 105.25, "name": "Krakatau Reef",         "cluster_id": 11},
-    ]
-
-    # Generate 8 recent weekly labels
-    today = datetime.utcnow()
-    weeks = []
-    for i in range(7, -1, -1):
-        d = today - timedelta(weeks=i)
-        weeks.append(d.strftime("%Y-W%V"))
-
-    n_c = len(centroids)
-    n_w = len(weeks)
-
-    def rand_series(lo, hi):
-        return [[round(rng.uniform(lo, hi), 3) for _ in range(n_w)] for _ in range(n_c)]
-
-    risk_score   = rand_series(0.05, 0.95)
-    tsa_dhw_last = rand_series(0.0, 18.0)
-    tsa_dhw_max  = [[max(tsa_dhw_last[c]) for _ in range(n_w)] for c in range(n_c)]
-    filled_sst_c = rand_series(26.0, 32.5)
-    n_records    = [[rng.randint(10, 120) for _ in range(n_w)] for _ in range(n_c)]
-
-    # Derive probabilities from risk_score
-    prob_none     = [[round(max(0.0, 1.0 - risk_score[c][w] * 1.5), 3) for w in range(n_w)] for c in range(n_c)]
-    prob_severe   = [[round(max(0.0, risk_score[c][w] - 0.4), 3) for w in range(n_w)] for c in range(n_c)]
-    prob_moderate = [[round(max(0.0, 1.0 - prob_none[c][w] - prob_severe[c][w]), 3) for w in range(n_w)] for c in range(n_c)]
-
-    def classify(r):
-        if r >= 0.65:
-            return 2
-        if r >= 0.35:
-            return 1
-        return 0
-
-    predicted_class = [[classify(risk_score[c][w]) for w in range(n_w)] for c in range(n_c)]
-
-    all_risk   = [v for row in risk_score   for v in row]
-    all_dhw    = [v for row in tsa_dhw_last for v in row]
-    all_sst    = [v for row in filled_sst_c for v in row]
-
-    bundle = {
-        "bbox": {
-            "min_lat": min(c["lat"] for c in centroids) - 2,
-            "max_lat": max(c["lat"] for c in centroids) + 2,
-            "min_lon": min(c["lon"] for c in centroids) - 2,
-            "max_lon": max(c["lon"] for c in centroids) + 2,
-        },
-        "weeks": weeks,
-        "centroids": centroids,
-        "severity_labels": {"0": "No Bleaching", "1": "Moderate Bleaching", "2": "Severe Bleaching"},
-        "metrics": {
-            "risk_score":   {"min": round(min(all_risk), 3), "max": round(max(all_risk), 3), "label": "Risk Score",  "unit": ""},
-            "tsa_dhw_last": {"min": round(min(all_dhw), 1),  "max": round(max(all_dhw), 1),  "label": "DHW (last)",  "unit": "°C-wk"},
-            "filled_sst_c": {"min": round(min(all_sst), 1),  "max": round(max(all_sst), 1),  "label": "SST",         "unit": "°C"},
-        },
-        "models": {
-            "lstm": {
-                "predicted_class": predicted_class,
-                "risk_score":      risk_score,
-                "tsa_dhw_last":    tsa_dhw_last,
-                "tsa_dhw_max":     tsa_dhw_max,
-                "filled_sst_c":    filled_sst_c,
-                "n_records":       n_records,
-                "prob_none":       prob_none,
-                "prob_moderate":   prob_moderate,
-                "prob_severe":     prob_severe,
-            }
-        },
-    }
-    return jsonify(bundle)
+    """Return coral-bleaching prediction bundle from GBR model outputs."""
+    try:
+        from app.coral_bleaching_loader import get_bundle
+        bundle = get_bundle()
+        return jsonify(bundle)
+    except Exception as e:
+        print(f"[CORAL] Error loading real data: {e}")
+        return jsonify({"error": "Coral bleaching data unavailable", "details": str(e)}), 503
 
 
 @bp.route("/health")

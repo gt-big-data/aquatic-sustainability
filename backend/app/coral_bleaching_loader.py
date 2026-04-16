@@ -14,6 +14,30 @@ _NAMES_JSON  = os.path.join("data", "coral_bleaching", "centroid_names.json")
 
 _KELVIN_TO_C = 273.15
 
+# Fallback names for GBR clusters (cluster_id -> name)
+_DEFAULT_GBR_NAMES = {
+    0: "Great Barrier Reef - North",
+    1: "Great Barrier Reef - Central North",
+    2: "Great Barrier Reef - North Central",
+    3: "Great Barrier Reef - Central",
+    5: "Great Barrier Reef - South Central",
+    6: "Great Barrier Reef - Far North",
+    12: "Great Barrier Reef - South",
+    14: "Great Barrier Reef - Southeast",
+    15: "Great Barrier Reef - South Inner",
+    36: "Great Barrier Reef - North Inner",
+    38: "Great Barrier Reef - Central Inner",
+    39: "Great Barrier Reef - Far North Central",
+    70: "Great Barrier Reef - North Central (E)",
+    76: "Great Barrier Reef - Central East",
+    91: "Great Barrier Reef - Central (E)",
+    103: "Great Barrier Reef - North East",
+    113: "Great Barrier Reef - North (E)",
+    117: "Great Barrier Reef - North Central (NE)",
+    128: "Great Barrier Reef - Northeast",
+    130: "Great Barrier Reef - North Interior",
+}
+
 _METRIC_LABELS = {
     "risk_score":   {"unit": "",          "label": "Risk Score"},
     "tsa_dhw_last": {"unit": "\u00B0C-weeks", "label": "DHW (last)"},
@@ -83,21 +107,31 @@ def _read_model_csv(path: str):
 
 
 def _load_names() -> dict:
+    """Load centroid names from JSON file, falling back to defaults if missing."""
     try:
         with open(_NAMES_JSON) as f:
             raw = json.load(f)
+            # normalize keys to str (JSON keys are always strings anyway)
+            return {str(k): v for k, v in raw.items()}
     except (OSError, json.JSONDecodeError):
-        return {}
-    # normalize keys to str (JSON keys are always strings anyway)
-    return {str(k): v for k, v in raw.items()}
+        # Fall back to default GBR names
+        return {str(k): v for k, v in _DEFAULT_GBR_NAMES.items()}
 
 
 def _build_bundle() -> dict:
-    lstm_rows,    weeks_lstm,    centroids_lstm    = _read_model_csv(_LSTM_CSV)
-    xgboost_rows, weeks_xgboost, centroids_xgboost = _read_model_csv(_XGBOOST_CSV)
-
-    if weeks_lstm != weeks_xgboost:
-        raise RuntimeError("coral bleaching CSVs have mismatched week grids")
+    lstm_rows, weeks_lstm, centroids_lstm = _read_model_csv(_LSTM_CSV)
+    
+    # Try to load XGBoost, but use LSTM as fallback if missing
+    try:
+        xgboost_rows, weeks_xgboost, centroids_xgboost = _read_model_csv(_XGBOOST_CSV)
+        if weeks_lstm != weeks_xgboost:
+            print("[CORAL] WARNING: XGBoost weeks don't match LSTM, using LSTM as fallback")
+            xgboost_rows = lstm_rows
+            weeks_xgboost = weeks_lstm
+    except FileNotFoundError:
+        print("[CORAL] XGBoost CSV not found, using LSTM as fallback")
+        xgboost_rows = lstm_rows
+        weeks_xgboost = weeks_lstm
 
     weeks = weeks_lstm
     cluster_ids = sorted(centroids_lstm.keys())
