@@ -17,7 +17,6 @@ const teamLeads = [
 const teamMembers = [
   { name: "William Gao", username: "william-gao-709a0a17b", role: "Platform" },
   { name: "Joshua Hevelow", username: "joshhevelow", role: "Data Viz" },
-  { name: "Joshua Kim", username: "joshuakim", role: "Platform" },
   { name: "Quinten Lemoine", username: "quintenlemoine", role: "Analysis" },
   { name: "Surya Narasimhan", username: "surya-narasimhan", role: "Analysis" },
   { name: "Anish Neema", username: "anishneema", role: "Analysis" },
