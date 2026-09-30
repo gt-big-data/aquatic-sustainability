@@ -70,6 +70,11 @@ def create_app():
     def news():
         return send_from_directory(app.static_folder + "/pages", "news.html")
 
+    # OAuth callback — Supabase redirects here after Google sign-in
+    @app.route("/auth/callback")
+    def auth_callback():
+        return send_from_directory(app.static_folder + "/pages", "auth-callback.html")
+
     # Pages routes
     #@app.route("/pages/flood-drought.html")
     #def flood_drought():
