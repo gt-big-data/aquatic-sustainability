@@ -15,16 +15,18 @@ const teamLeads = [
 
 //TODO: Update member info here
 const teamMembers = [
-  { name: "William Gao", username: "william-gao-709a0a17b", role: "Platform" },
   { name: "Joshua Hevelow", username: "joshhevelow", role: "Data Viz" },
-  { name: "Quinten Lemoine", username: "quintenlemoine", role: "Analysis" },
+  { name: "Alexis Tan", username: "", role: "Data Viz" },
+  { name: "Shruti Chaluvadi", username: "", role: "Platform" },
+  { name: "Daniel Thomson", username: "", role: "Platform" },
   { name: "Surya Narasimhan", username: "surya-narasimhan", role: "Analysis" },
-  { name: "Anish Neema", username: "anishneema", role: "Analysis" },
-  { name: "Deepesh Raj", username: "deepesh-raj", role: "Data Viz" },
-  { name: "Anoushka Scaria", username: "anoushka-scaria-0a8080313", role: "Data Viz" },
-  { name: "Grace Shao", username: "grace-shao-gt-cs", role: "Platform" },
-  { name: "Vaibhav Wudaru", username: "vaibhav-wudaru-9605aa248", role: "Platform/Analysis" }
-  
+  { name: "Spas Stoimenov", username: "", role: "Analysis" },
+  { name: "Aashay Gupte", username: "", role: "Analysis" },
+  { name: "Eashan Gupta", username: "", role: "Analysis" },
+  { name: "Aditya Mukker", username: "", role: "Analysis" },
+  { name: "Alex Wang", username: "", role: "Analysis" },
+  { name: "Brian Son", username: "", role: "Analysis" },
+  { name: "Valerie Song", username: "", role: "Analysis" }
 ];
 
 /* ===== CARD GENERATOR ===== */
