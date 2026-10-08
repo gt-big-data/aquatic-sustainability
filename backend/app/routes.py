@@ -277,6 +277,16 @@ def maps_key():
     key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
     return {"googleMapsApiKey": key}
 
+@bp.route("/config/supabase")
+def supabase_config():
+    """Expose public Supabase credentials (anon key only) to the frontend.
+    The anon key is safe to expose — it has row-level security enforced.
+    """
+    return {
+        "supabaseUrl": current_app.config.get("SUPABASE_URL", ""),
+        "supabaseAnonKey": current_app.config.get("SUPABASE_ANON_KEY", ""),
+    }
+
 @bp.route('/register', methods=['POST'])
 @cross_origin(origins="https://aquatic-sustainability-834508815183.us-east1.run.app/", methods=["POST", "OPTIONS"])
 def register():
