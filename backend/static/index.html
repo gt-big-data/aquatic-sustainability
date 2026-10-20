@@ -57,17 +57,65 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   }
 
-  .cards {
+  /* Outer box */
+  .tools {
     background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.12);
     border-radius: 16px;
-    padding: 24px;
+    padding: 24px 32px 32px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
   }
 
-  html:not(.light) .cards {
+  html:not(.light) .tools {
     background: rgba(26, 26, 26, 0.9);
+    border-color: #2e2e2e;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .tools-title {
+    font-size: 1.5rem;
+    margin: 0 0 24px;
+  }
+
+  /* 2x2 grid */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+
+  /* Individual cards */
+  .card {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 16px;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  html:not(.light) .card {
+    background: #1c1c1c;
+    border-color: #2e2e2e;
+  }
+
+  .card h2 {
+    font-size: 1.5rem;
+    margin: 0 0 12px;
+  }
+
+  .card p {
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
+
+  .card-link {
+    color: #7aa7ff;
+    text-decoration: none;
+  }
+
+  /* Stack to one column on phones */
+  @media (max-width: 700px) {
+    .cards { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -91,33 +139,37 @@ Analyzing watershed anomalies and water affordability patterns to protect at‑r
   <h3><strong>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</strong></h3>
 </section>
 
-<section class="cards">
-<article class="card">
-<h2>Flood/Drought Vulnerability</h2>
-<p>View predicted flood/drought risk and overlay affordability & incident annotations.</p>
-<a class="card-link" href="/flood-drought">Open tool →</a>
-</article>
-<article class="card">
-<h2>Coral Bleaching Risk</h2>
-<p>Monitor weekly coral bleaching predictions across the Great Barrier Reef with thermal stress indicators.</p>
-<a class="card-link" href="/coral-bleaching">Open tool →</a>
-</article>
-<article class="card">
-<h2>Oil Spill Detection</h2>
-<p>Investigate near‑real‑time spill detections and patterns across marine regions.</p>
-<a class="card-link" href="/oil-spill">Open tool →</a>
-</article>
-<article class="card">
-<h2>News & Updates</h2>
-<p>Stay informed with the latest news and updates in aquatic sustainability research.</p>
-<a class="card-link" href="/news">View News →</a>
-</article>
+<section class="tools">
+  <h2 class="tools-title">Tools and updates</h2>
+
+  <div class="cards">
+    <article class="card">
+      <h2>Flood/Drought Vulnerability</h2>
+      <p>View predicted flood/drought risk and overlay affordability &amp; incident annotations.</p>
+      <a class="card-link" href="/flood-drought">Open tool →</a>
+    </article>
+    <article class="card">
+      <h2>Coral Bleaching Risk</h2>
+      <p>Monitor weekly coral bleaching predictions across the Great Barrier Reef with thermal stress indicators.</p>
+      <a class="card-link" href="/coral-bleaching">Open tool →</a>
+    </article>
+    <article class="card">
+      <h2>Oil Spill Detection</h2>
+      <p>Investigate near‑real‑time spill detections and patterns across marine regions.</p>
+      <a class="card-link" href="/oil-spill">Open tool →</a>
+    </article>
+    <article class="card">
+      <h2>News &amp; Updates</h2>
+      <p>Stay informed with the latest news and updates in aquatic sustainability research.</p>
+      <a class="card-link" href="/news">View News →</a>
+    </article>
+  </div>
 </section>
 </main>
 
 
 <footer class="site-footer">
-<small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water & Sanitation</small>
+<small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water &amp; Sanitation</small>
 </footer>
 
 
