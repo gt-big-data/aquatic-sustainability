@@ -16,16 +16,16 @@ const teamLeads = [
 //TODO: Update member info here
 const teamMembers = [
   { name: "Joshua Hevelow", username: "joshhevelow", role: "Data Viz" },
-  { name: "Alexis Tan", username: "", role: "Data Viz" },
+  { name: "Alexis Tan", username: "Alexis Tan", role: "Data Viz" },
   { name: "Shruti Chaluvadi", username: "", role: "Platform" },
-  { name: "Daniel Thomson", username: "", role: "Platform" },
+  { name: "Daniel Thomson", username: "Dan Thomson", role: "Platform" },
   { name: "Surya Narasimhan", username: "surya-narasimhan", role: "Analysis" },
-  { name: "Spas Stoimenov", username: "", role: "Analysis" },
+  { name: "Spas Stoimenov", username: "Spas Stoimenov", role: "Analysis" },
   { name: "Aashay Gupte", username: "", role: "Analysis" },
-  { name: "Eashan Gupta", username: "", role: "Analysis" },
+  { name: "Eashan Gupta", username: "Eashan Gupta", role: "Analysis" },
   { name: "Aditya Mukker", username: "", role: "Analysis" },
-  { name: "Alex Wang", username: "", role: "Analysis" },
-  { name: "Brian Son", username: "", role: "Analysis" },
+  { name: "Alex Wang", username: "Alex Wang", role: "Analysis" },
+  { name: "Brian Son", username: "Brian Son", role: "Analysis" },
   { name: "Valerie Song", username: "", role: "Analysis" }
 ];
 
