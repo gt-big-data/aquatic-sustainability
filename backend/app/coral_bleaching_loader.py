@@ -8,9 +8,12 @@ import json
 import os
 from datetime import datetime, timezone
 
-_LSTM_CSV    = os.path.join("data", "coral_bleaching", "gbr_predictions_temporal_lstm.csv")
-_XGBOOST_CSV = os.path.join("data", "coral_bleaching", "gbr_predictions_temporal_xgboost.csv")
-_NAMES_JSON  = os.path.join("data", "coral_bleaching", "centroid_names.json")
+_BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_CORAL_DIR = os.path.join(_BACKEND_DIR, "data", "coral_bleaching")
+
+_LSTM_CSV    = os.path.join(_CORAL_DIR, "gbr_predictions_temporal_lstm.csv")
+_XGBOOST_CSV = os.path.join(_CORAL_DIR, "gbr_predictions_temporal_xgboost.csv")
+_NAMES_JSON  = os.path.join(_CORAL_DIR, "centroid_names.json")
 
 _KELVIN_TO_C = 273.15
 

@@ -597,7 +597,7 @@
           return;
         }
 
-        renderFloodPointsOnMap(data.result, { append, sourceName, radius: 35000, isPreloaded });
+        renderFloodPointsOnMap(data.result, { append, sourceName, isPreloaded });
       } catch (err) {
         console.error('Network or parsing error calling /api/flood-risk', err);
         if (!silent) {
@@ -607,7 +607,7 @@
     }
 
     let map;
-    let modelCircles = [];
+    let modelHexagons = [];
     let activeInfoWindow = null;
     let floodPolygons = [];
     let droughtPolygons = [];
@@ -630,7 +630,7 @@
       { name: 'Chiang Mai, Thailand', lat: 18.7883, lon: 98.9853 },
     ];
 
-    // Fetch live model data for a single location and add its circles to the map.
+    // Fetch live model data for a single location and add its H3 cells to the map.
     async function fetchAndRenderLocation(location, loadingEl) {
       try {
         const resp = await fetch('/api/flood-risk', {
@@ -644,7 +644,7 @@
         }
         const data = await resp.json();
         if (data.result) {
-          renderFloodPointsOnMap(data.result, { append: true, sourceName: location.name, radius: 60000, isPreloaded: true });
+          renderFloodPointsOnMap(data.result, { append: true, sourceName: location.name, isPreloaded: true });
           applyFilters();
         }
       } catch (err) {
@@ -704,25 +704,25 @@
       return R * c;
     }
 
-    function findMatchingPreloadedCircle(lat, lng, maxDistanceKm = 40) {
-      for (const circle of modelCircles) {
-        if (!circle._isPreloaded) continue;
-        const center = circle.getCenter();
-        if (!center) continue;
-        const distKm = haversineKm(lat, lng, center.lat(), center.lng());
-        if (distKm <= maxDistanceKm) {
-          return circle;
+    function findMatchingPreloadedHexagon(lat, lng, maxDistanceKm = 40) {
+      let closest = null;
+      let closestDistance = maxDistanceKm;
+      for (const hexagon of modelHexagons) {
+        if (!hexagon._isPreloaded) continue;
+        const distanceKm = haversineKm(lat, lng, hexagon._center.lat, hexagon._center.lng);
+        if (distanceKm <= closestDistance) {
+          closest = hexagon;
+          closestDistance = distanceKm;
         }
       }
-      return null;
+      return closest;
     }
 
-    function focusExistingPreloadedCircle(lat, lng) {
-      const match = findMatchingPreloadedCircle(lat, lng, 40);
+    function focusExistingPreloadedHexagon(lat, lng) {
+      const match = findMatchingPreloadedHexagon(lat, lng, 40);
       if (!match) return false;
 
-      const center = match.getCenter();
-      map.setCenter(center);
+      map.setCenter(match._center);
       map.setZoom(8);
 
       if (activeInfoWindow) {
@@ -731,7 +731,7 @@
       }
 
       if (match._infoWindow) {
-        match._infoWindow.setPosition(center);
+        match._infoWindow.setPosition(match._center);
         match._infoWindow.open(map);
         activeInfoWindow = match._infoWindow;
       }
@@ -740,11 +740,10 @@
     }
 
     function renderFloodPointsOnMap(result, options = {}) {
-      const { append = false, sourceName = 'Searched location', radius = 60000, isPreloaded = false } = options;
-      // Remove existing circles
+      const { append = false, sourceName = 'Searched location', isPreloaded = false } = options;
       if (!append) {
-        modelCircles.forEach(c => c.setMap(null));
-        modelCircles = [];
+        modelHexagons.forEach(hexagon => hexagon.setMap(null));
+        modelHexagons = [];
       }
 
       if (!result || !Array.isArray(result.points)) {
@@ -752,145 +751,96 @@
         return;
       }
 
-      // Determine circle center: prefer explicit result.center, fall back to mean of points
-      let circleLat, circleLon;
-      if (result.center && typeof result.center.lat === 'number') {
-        circleLat = result.center.lat;
-        circleLon = result.center.lon;
-      } else if (result.points.length > 0) {
-        circleLat = result.points.reduce((s, p) => s + p.lat, 0) / result.points.length;
-        circleLon = result.points.reduce((s, p) => s + p.lon, 0) / result.points.length;
-      } else {
-        return;
-      }
-
-      // Center map on search
-      if (!append && result.center && typeof result.center.lat === 'number') {
-        map.setCenter({ lat: circleLat, lng: circleLon });
+      if (!append && Number.isFinite(result.center?.lat) && Number.isFinite(result.center?.lon)) {
+        map.setCenter({ lat: result.center.lat, lng: result.center.lon });
         map.setZoom(9);
       }
 
-      // Aggregate probability across all land points
-      const landPoints = result.points.filter(p => isOnLand(p.lat, p.lon));
-      console.log(`[LANDMASK] ${sourceName}: ${result.points.length} → ${landPoints.length} land points`);
+      const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character]);
+      const safeSourceName = escapeHtml(sourceName);
+      let renderedCount = 0;
 
-      const avgProb = landPoints.length > 0
-        ? landPoints.reduce((s, p) => s + (typeof p.prob === 'number' ? p.prob : 0), 0) / landPoints.length
-        : 0;
-      const maxProb = landPoints.length > 0
-        ? Math.max(...landPoints.map(p => typeof p.prob === 'number' ? p.prob : 0))
-        : 0;
-      const probPct = avgProb * 100;
+      result.points.forEach(point => {
+        if (
+          !point ||
+          !Number.isFinite(point.lat) ||
+          !Number.isFinite(point.lon) ||
+          !Number.isFinite(point.prob) ||
+          !Array.isArray(point.boundary) ||
+          point.boundary.length < 3
+        ) {
+          console.warn('renderFloodPointsOnMap: skipping invalid H3 point', point);
+          return;
+        }
 
-      const risk =
-        avgProb >= 0.75 ? 'high' :
-        avgProb >= 0.5  ? 'warning' :
-        avgProb >= 0.3  ? 'medium' : 'low';
+        const paths = point.boundary.map(([lat, lng]) => ({ lat, lng }));
+        if (paths.some(vertex => !Number.isFinite(vertex.lat) || !Number.isFinite(vertex.lng))) {
+          console.warn('renderFloodPointsOnMap: skipping H3 point with invalid boundary', point);
+          return;
+        }
 
-      const color =
-        risk === 'high'    ? '#ef4444' :
-        risk === 'warning' ? '#fbbf24' :
-        risk === 'medium'  ? '#fb923c' :
-        '#22c55e';
+        const probability = point.prob * 100;
+        const risk = point.prob >= 0.75 ? 'high'
+          : point.prob >= 0.5 ? 'warning'
+          : point.prob >= 0.3 ? 'medium'
+          : 'low';
+        const color = risk === 'high' ? '#ef4444'
+          : risk === 'warning' ? '#fbbf24'
+          : risk === 'medium' ? '#fb923c'
+          : '#22c55e';
+        const riskLabel = risk === 'high' ? 'High Risk'
+          : risk === 'warning' ? 'Elevated Risk'
+          : risk === 'medium' ? 'Moderate Risk'
+          : 'Low Risk';
+        const center = { lat: point.lat, lng: point.lon };
+        const hexagon = new google.maps.Polygon({
+          paths,
+          strokeColor: color,
+          strokeOpacity: 0.85,
+          strokeWeight: 1,
+          fillColor: color,
+          fillOpacity: 0.45,
+          map,
+        });
 
-      const riskLabel =
-        risk === 'high'    ? 'High Risk' :
-        risk === 'warning' ? 'Elevated Risk' :
-        risk === 'medium'  ? 'Moderate Risk' :
-        'Low Risk';
+        hexagon._prob = probability;
+        hexagon._h3 = point.h3;
+        hexagon._center = center;
+        hexagon._sourceName = sourceName;
+        hexagon._isPreloaded = isPreloaded;
 
-      const riskBg =
-        risk === 'high'    ? '#fef2f2' :
-        risk === 'warning' ? '#fffbeb' :
-        risk === 'medium'  ? '#fff7ed' :
-        '#f0fdf4';
+        const rain = Number.isFinite(point.local_rain_mm)
+          ? `<div>Local rainfall: ${point.local_rain_mm.toFixed(1)} mm</div>`
+          : '';
+        const info = new google.maps.InfoWindow({
+          content: `<div style="font-family: sans-serif; min-width: 180px; line-height: 1.6;">
+            <strong>${safeSourceName}</strong><br>
+            ${riskLabel} · ${probability.toFixed(1)}%<br>
+            H3 cell: ${escapeHtml(point.h3 || 'Unavailable')}<br>
+            ${rain}
+            <small>${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}°</small>
+          </div>`,
+        });
+        hexagon._infoWindow = info;
 
-      const riskBorder =
-        risk === 'high'    ? '#fca5a5' :
-        risk === 'warning' ? '#fde68a' :
-        risk === 'medium'  ? '#fdba74' :
-        '#86efac';
+        hexagon.addListener('click', event => {
+          if (activeInfoWindow) activeInfoWindow.close();
+          info.setPosition(event.latLng || center);
+          info.open(map);
+          activeInfoWindow = info;
+        });
 
-      const circle = new google.maps.Circle({
-        strokeColor: color,
-        strokeOpacity: 0.85,
-        strokeWeight: 2,
-        fillColor: color,
-        fillOpacity: 0.25,
-        map,
-        center: { lat: circleLat, lng: circleLon },
-        radius: radius,
+        modelHexagons.push(hexagon);
+        renderedCount += 1;
       });
 
-      circle._prob = probPct;
-      circle._risk = risk;
-      circle._sourceName = sourceName;
-      circle._isPreloaded = isPreloaded;
-
-      const infoContent = `
-        <div style="
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          min-width: 200px;
-          max-width: 260px;
-          padding: 4px 2px;
-        ">
-          <div style="
-            font-size: 15px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e5e7eb;
-          ">${sourceName}</div>
-
-          <div style="
-            display: inline-block;
-            background: ${riskBg};
-            border: 1px solid ${riskBorder};
-            color: ${color};
-            font-size: 12px;
-            font-weight: 600;
-            padding: 3px 10px;
-            border-radius: 999px;
-            margin-bottom: 10px;
-          ">${riskLabel}</div>
-
-          <div style="margin-bottom: 6px;">
-            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Avg Flood Probability</div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <div style="flex: 1; background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
-                <div style="width: ${probPct.toFixed(1)}%; background: ${color}; height: 100%; border-radius: 4px;"></div>
-              </div>
-              <span style="font-size: 13px; font-weight: 600; color: #111827; min-width: 38px; text-align: right;">${probPct.toFixed(1)}%</span>
-            </div>
-          </div>
-
-          <div style="margin-bottom: 6px;">
-            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Peak Probability</div>
-            <span style="font-size: 13px; font-weight: 500; color: #374151;">${(maxProb * 100).toFixed(1)}%</span>
-          </div>
-
-          <div style="
-            font-size: 11px;
-            color: #9ca3af;
-            margin-top: 8px;
-            padding-top: 6px;
-            border-top: 1px solid #f3f4f6;
-          ">${circleLat.toFixed(3)}°, ${circleLon.toFixed(3)}° &nbsp;·&nbsp; ${landPoints.length} sample points</div>
-        </div>
-      `;
-
-      const info = new google.maps.InfoWindow({ content: infoContent });
-      circle._infoWindow = info;
-
-      circle.addListener('click', (e) => {
-        if (activeInfoWindow) activeInfoWindow.close();
-        info.setPosition(e.latLng);
-        info.open(map);
-        activeInfoWindow = info;
-      });
-
-      modelCircles.push(circle);
+      console.log(`[H3] ${sourceName}: rendered ${renderedCount}/${result.points.length} hexagons`);
     }
 
   // Removed hardcoded region-specific flood/drought overlays.
@@ -1098,9 +1048,9 @@
       polygon.setVisible(visible);
     });
 
-    modelCircles.forEach((circle) => {
-      const visible = showFlood && circle._prob >= minProb && circle._prob <= maxProb;
-      circle.setVisible(visible);
+    modelHexagons.forEach((hexagon) => {
+      const visible = showFlood && hexagon._prob >= minProb && hexagon._prob <= maxProb;
+      hexagon.setVisible(visible);
     });
   }
 
@@ -1189,7 +1139,7 @@
         const loc = autocompletePlace.geometry.location;
         const lat = loc.lat();
         const lng = loc.lng();
-        if (focusExistingPreloadedCircle(lat, lng)) {
+        if (focusExistingPreloadedHexagon(lat, lng)) {
           return;
         }
         map.setCenter(loc);
@@ -1203,7 +1153,7 @@
           const loc = results[0].geometry.location;
           const lat = loc.lat();
           const lng = loc.lng();
-          if (focusExistingPreloadedCircle(lat, lng)) {
+          if (focusExistingPreloadedHexagon(lat, lng)) {
             return;
           }
           map.setCenter(loc);

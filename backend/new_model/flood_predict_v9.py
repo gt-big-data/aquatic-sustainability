@@ -9,7 +9,8 @@ real-time GPM precipitation + SMAP soil moisture + ERA5 temperature
 Usage:
     1. Place model files in the same directory as this script
     2. pip install earthaccess h5py rasterio xarray cartopy torch cdsapi netCDF4 global-land-mask
-    3. python flood_predict_v9.py
+    3. Set EARTHDATA_USERNAME, EARTHDATA_PASSWORD, and CDS_API_KEY in the environment
+    4. python flood_predict_v9.py
 """
 
 import sys
@@ -89,10 +90,7 @@ print("All imports OK.\n", flush=True)
 # 1. CONFIGURATION
 # ═══════════════════════════════════════════════════════════════
 
-EARTHDATA_USER = "albertzheng"
-EARTHDATA_PASS = "Alberbruh321$"
 CDS_URL = "https://cds.climate.copernicus.eu/api"
-CDS_KEY = "25fec36b-e11f-45fd-9dd9-c16fe4a4d4ee"
 
 try:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -172,9 +170,13 @@ def print_config():
 # ═══════════════════════════════════════════════════════════════
 
 def setup_cds_credentials():
+    cds_key = os.environ.get("CDS_API_KEY")
+    if not cds_key:
+        raise RuntimeError("Missing Copernicus credential: CDS_API_KEY must be set")
+
     rc_path = os.path.join(os.path.expanduser("~"), ".cdsapirc")
     with open(rc_path, "w") as f:
-        f.write(f"url: {CDS_URL}\nkey: {CDS_KEY}\n")
+        f.write(f"url: {CDS_URL}\nkey: {cds_key}\n")
     os.chmod(rc_path, 0o600)
     print(f"[CDS] .cdsapirc written to {rc_path}", flush=True)
 
@@ -246,12 +248,18 @@ def load_model_and_scalers():
 # ═══════════════════════════════════════════════════════════════
 
 def setup_earthdata_auth():
-    os.environ["EARTHDATA_USERNAME"] = EARTHDATA_USER
-    os.environ["EARTHDATA_PASSWORD"] = EARTHDATA_PASS
+    username = os.environ.get("EARTHDATA_USERNAME")
+    password = os.environ.get("EARTHDATA_PASSWORD")
+    if not username or not password:
+        raise RuntimeError(
+            "Missing Earthdata credentials: EARTHDATA_USERNAME and "
+            "EARTHDATA_PASSWORD must be set"
+        )
+
     netrc_path = os.path.expanduser("~/.netrc")
     with open(netrc_path, "w") as f:
-        f.write(f"machine urs.earthdata.nasa.gov\nlogin {EARTHDATA_USER}\npassword {EARTHDATA_PASS}\n"
-                f"machine data.gesdisc.earthdata.nasa.gov\nlogin {EARTHDATA_USER}\npassword {EARTHDATA_PASS}\n")
+        f.write(f"machine urs.earthdata.nasa.gov\nlogin {username}\npassword {password}\n"
+                f"machine data.gesdisc.earthdata.gov\nlogin {username}\npassword {password}\n")
     os.chmod(netrc_path, 0o600)
     earthaccess.login(strategy="netrc")
     print("[AUTH] Earthdata login complete.", flush=True)
