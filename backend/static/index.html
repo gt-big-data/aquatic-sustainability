@@ -56,7 +56,7 @@
   .hero .cta-row { margin-top: 16px; flex-wrap: wrap; }
   .description { padding: 20px var(--section-inset); }
   .card { padding: var(--section-gap); }
-  .card h2 { margin: 0 0 12px; }
+  .card h3 { font-size: 1.25rem; margin: 0 0 12px; }
   .card p { margin: 0 0 16px; }
   .card-link { margin-top: 0; }
 
@@ -73,7 +73,7 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   }
 
-  .cards {
+  .home-panel {
     background: rgba(255, 255, 255, 0.9);
     border-radius: 16px;
     padding: var(--section-gap) var(--section-inset);
@@ -83,9 +83,15 @@
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
   }
 
-  html:not(.light) .cards {
+  html:not(.light) .home-panel {
     background: rgba(26, 26, 26, 0.9);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+  .home-panel > h2 { margin: 0 0 16px; }
+  .map-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--section-gap); }
+  .news-panel p { margin: 0 0 12px; }
+  @media (max-width: 640px) {
+    .map-cards { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -101,7 +107,7 @@ Analyzing watershed anomalies and water affordability patterns to protect at‑r
 </p>
 <div class="cta-row">
 <a class="btn" href="/flood-drought">Explore Flood/Drought</a>
-<a class="btn btn-outline" href="/oil-spill">Explore Oil Spill</a>
+<a class="btn btn-outline" href="/coral-bleaching">Explore Coral Bleaching</a>
 </div>
 </section>
 
@@ -109,27 +115,26 @@ Analyzing watershed anomalies and water affordability patterns to protect at‑r
   <h3><strong>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</strong></h3>
 </section>
 
-<section class="cards">
-<article class="card">
-<h2>Flood/Drought Vulnerability</h2>
-<p>View predicted flood/drought risk and overlay affordability & incident annotations.</p>
-<a class="card-link" href="/flood-drought">Open tool →</a>
-</article>
-<article class="card">
-<h2>Coral Bleaching Risk</h2>
-<p>Monitor weekly coral bleaching predictions across the Great Barrier Reef with thermal stress indicators.</p>
-<a class="card-link" href="/coral-bleaching">Open tool →</a>
-</article>
-<article class="card">
-<h2>Oil Spill Detection</h2>
-<p>Investigate near‑real‑time spill detections and patterns across marine regions.</p>
-<a class="card-link" href="/oil-spill">Open tool →</a>
-</article>
-<article class="card">
-<h2>News & Updates</h2>
-<p>Stay informed with the latest news and updates in aquatic sustainability research.</p>
-<a class="card-link" href="/news">View News →</a>
-</article>
+<section class="home-panel" aria-labelledby="maps-title">
+  <h2 id="maps-title">Explore the maps</h2>
+  <div class="map-cards">
+    <article class="card">
+      <h3>Flood/Drought Vulnerability</h3>
+      <p>View predicted flood/drought risk and overlay affordability &amp; incident annotations.</p>
+      <a class="card-link" href="/flood-drought">Explore flood and drought risk →</a>
+    </article>
+    <article class="card">
+      <h3>Coral Bleaching Risk</h3>
+      <p>Explore weekly bleaching predictions across the Great Barrier Reef. Select a reef to see its risk trend.</p>
+      <a class="card-link" href="/coral-bleaching">Explore reef predictions →</a>
+    </article>
+  </div>
+</section>
+
+<section class="home-panel news-panel" aria-labelledby="news-title">
+  <h2 id="news-title">News &amp; Updates</h2>
+  <p>Stay informed with the latest news and updates in aquatic sustainability research.</p>
+  <a class="card-link" href="/news">Read the news →</a>
 </section>
 </main>
 
