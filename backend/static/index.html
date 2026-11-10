@@ -43,11 +43,27 @@
     background: rgba(26, 26, 26, 0.95) !important;
   }
 
+  main.container.narrow {
+    --section-gap: clamp(16px, 3vw, 24px);
+    --section-inset: clamp(16px, 4vw, 32px);
+    display: grid;
+    gap: var(--section-gap);
+    margin-block: var(--section-gap);
+  }
+
+  .hero h1, .description h3 { margin: 0; }
+  .hero .lead { margin: 12px 0 0; }
+  .hero .cta-row { margin-top: 16px; flex-wrap: wrap; }
+  .description { padding: 20px var(--section-inset); }
+  .card { padding: var(--section-gap); }
+  .card h2 { margin: 0 0 12px; }
+  .card p { margin: 0 0 16px; }
+  .card-link { margin-top: 0; }
+
   .hero {
     background: rgba(255, 255, 255, 0.9);
     border-radius: 16px;
-    padding: 48px 32px;
-    margin-bottom: 32px;
+    padding: var(--section-inset);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
   }
@@ -60,7 +76,9 @@
   .cards {
     background: rgba(255, 255, 255, 0.9);
     border-radius: 16px;
-    padding: 24px;
+    padding: var(--section-gap) var(--section-inset);
+    gap: var(--section-gap);
+    margin: 0;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
   }
