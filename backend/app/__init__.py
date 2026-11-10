@@ -61,6 +61,10 @@ def create_app():
     @app.route("/coral-bleaching")
     def coralBleaching():
         return send_from_directory(app.static_folder + "/pages", "coral-bleaching.html")
+    # Dredging Depth Prediction
+    @app.route("/dredging")
+    def dredging():
+        return send_from_directory(app.static_folder + "/pages", "dredging.html")
     # Water Resources & Availability
     @app.route("/water")
     def water():
