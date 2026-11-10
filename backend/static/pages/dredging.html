@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dredging · Aquatic Sustainability</title>
+<link rel="stylesheet" href="/static/css/styles.css" />
+<style>
+  .filter-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    width: 280px;
+    backdrop-filter: blur(10px);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+
+  .filter-overlay h3 {
+    margin: 0 0 8px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .status-note {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  #map {
+    width: 100%;
+    height: calc(100vh - 80px);
+  }
+</style>
+</head>
+<body>
+<div data-navbar-root></div>
+
+<main class="workspace">
+<section class="map-panel" style="position: relative;">
+
+  <div class="filter-overlay">
+    <h3>Dredging</h3>
+    <div class="status-note">Model predictions coming soon.</div>
+  </div>
+
+  <div id="map"></div>
+</section>
+</main>
+
+<script>
+  function initMap() {
+    new google.maps.Map(document.getElementById('map'), {
+      center: { lat: 61.2181, lng: -149.9003 },
+      zoom: 9,
+      mapTypeId: 'hybrid',
+    });
+  }
+
+  fetch('/api/config/maps-key')
+    .then(res => res.json())
+    .then(data => {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${data.googleMapsApiKey || 'DEMO_KEY'}&callback=initMap`;
+      script.async = true;
+      document.head.appendChild(script);
+    });
+</script>
+
+<script src="/static/js/components/navbar.js" defer></script>
+<script src="/static/js/main.js" defer></script>
+</body>
+</html>
