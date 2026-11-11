@@ -1,83 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Dredging · Aquatic Sustainability</title>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dredging forecasts · Aquatic Sustainability</title>
 <link rel="stylesheet" href="/static/css/styles.css" />
-<style>
-  .filter-overlay {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 10;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    width: 280px;
-    backdrop-filter: blur(10px);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-  }
-
-  .filter-overlay h3 {
-    margin: 0 0 8px 0;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .status-note {
-    font-size: 12px;
-    color: var(--muted);
-    padding: 8px 10px;
-    background: var(--bg);
-    border-radius: 6px;
-    border: 1px solid var(--border);
-  }
-
-  #map {
-    width: 100%;
-    height: calc(100vh - 80px);
-  }
-</style>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
+<link rel="stylesheet" href="/static/css/dredging-forecast.css" />
 </head>
 <body>
 <div data-navbar-root></div>
-
-<main class="workspace">
-<section class="map-panel" style="position: relative;">
-
-  <div class="filter-overlay">
-    <h3>Dredging</h3>
-    <div class="status-note">Model predictions coming soon.</div>
-  </div>
-
-  <div id="map"></div>
+<main class="dredging-page">
+<header class="dredging-header"><p class="dredging-eyebrow">Anchorage · 10 m bathymetry</p><h1>Channel depth forecasts</h1><p>Explore model predictions over the surveyed channel. Compare depth and change, then download the same map as GeoJSON.</p></header>
+<p id="forecast-status" class="forecast-status" role="status" aria-live="polite">Loading historical forecast preview…</p>
+<p id="forecast-error" class="forecast-error" role="alert" hidden></p>
+<div id="forecast-content" hidden>
+<section class="dredging-summary" aria-label="Displayed area summary">
+<div><span>Predicted cells</span><strong id="cell-count">—</strong><small>10 m × 10 m each</small></div>
+<div><span>Mean predicted depth</span><strong id="mean-depth">—</strong><small>ft below low tide</small></div>
+<div><span>Mean predicted change</span><strong id="mean-change">—</strong><small>negative = shallower</small></div>
+<div><span>Predicted shoaling hotspots</span><strong id="hotspot-area">—</strong><small>area losing at least 1 ft</small></div>
 </section>
+<div class="dredging-layout">
+<section class="forecast-map-card" aria-label="Geographic forecast overlay">
+<div class="forecast-timeline">
+<label for="forecast-frame">Last input survey</label><output id="frame-origin" for="forecast-frame">—</output>
+<input id="forecast-frame" type="range" min="0" max="0" value="0" step="1" aria-describedby="frame-target timeline-help" />
+<p id="frame-target">—</p><p id="timeline-help">Historical preview: the slider changes the starting survey; each prediction is 28 days ahead.</p>
+</div>
+<div id="map" aria-label="Map of predicted channel depths in Anchorage"></div>
+<div class="forecast-legend" aria-label="Map color legend"><div id="legend-gradient"></div><div class="legend-values"><span id="legend-min"></span><span id="legend-max"></span></div><p id="legend-description"></p></div>
+<p id="basemap-status" class="forecast-map-note" hidden>Background tiles are unavailable. The geographic prediction overlay still works.</p>
+</section>
+<aside class="forecast-sidebar" aria-label="Forecast controls and interpretation">
+<section class="forecast-panel"><h2>Explore the map</h2>
+<label for="forecast-model">Model</label><select id="forecast-model"></select>
+<label for="forecast-layer">Color cells by</label><select id="forecast-layer"><option value="change">Predicted change (ft)</option><option value="depth">Predicted depth (ft)</option></select>
+<label class="forecast-checkbox"><input id="show-hotspots" type="checkbox" /> Mark predicted shoaling hotspots</label>
+<p class="forecast-help">Markers group nearby cells predicted to lose at least 1 ft. Select a cell for its depth and change.</p>
+<a id="download-geojson" class="forecast-download" aria-disabled="true">Download this GeoJSON</a></section>
+<section class="forecast-panel"><h2>Model performance</h2><p id="model-name">—</p><p class="forecast-score"><strong id="model-score">—</strong> ft MAE</p><p class="forecast-help">Mean absolute error on held-out survey dates. Lower is better; this is an evaluation score, not a confidence interval.</p></section>
+<section class="forecast-panel"><h2>Reading this preview</h2><p>Depth is positive below low tide. A negative change means shallowing; a positive change means deepening.</p><p>Only eligible cells with a measured starting depth are shown. Empty areas are outside this prediction footprint, not zero depth.</p><p>These are historical forecasts, not a live survey or navigation chart. Predicting a dredging date needs required channel depths and intervention records.</p></section>
+</aside>
+</div>
+</div>
 </main>
-
-<script>
-  function initMap() {
-    new google.maps.Map(document.getElementById('map'), {
-      center: { lat: 61.2181, lng: -149.9003 },
-      zoom: 9,
-      mapTypeId: 'hybrid',
-    });
-  }
-
-  fetch('/api/config/maps-key')
-    .then(res => res.json())
-    .then(data => {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${data.googleMapsApiKey || 'DEMO_KEY'}&callback=initMap`;
-      script.async = true;
-      document.head.appendChild(script);
-    });
-</script>
-
-<script src="/static/js/components/navbar.js" defer></script>
-<script src="/static/js/main.js" defer></script>
-</body>
-</html>
+<script src="/static/vendor/leaflet/leaflet.js" defer></script><script src="/static/js/components/navbar.js" defer></script><script src="/static/js/main.js" defer></script><script src="/static/js/pages/dredgingForecast.js" defer></script>
+</body></html>

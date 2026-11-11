@@ -1,0 +1,20 @@
+{
+  "catboost-rmse": {
+    "difference_ft": -0.002113541979159036,
+    "lower95_ft": -0.009381631172975776,
+    "upper95_ft": 0.006078002956164764,
+    "month_blocks": 10
+  },
+  "extra-trees": {
+    "difference_ft": -0.04388470807522771,
+    "lower95_ft": -0.060314156472164863,
+    "upper95_ft": -0.027506517528230634,
+    "month_blocks": 10
+  },
+  "persistence": {
+    "difference_ft": -0.2733757901250054,
+    "lower95_ft": -0.36088586063660394,
+    "upper95_ft": -0.19594456526238346,
+    "month_blocks": 10
+  }
+}

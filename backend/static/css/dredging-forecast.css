@@ -1,0 +1,41 @@
+.dredging-page { max-width:1340px; width:calc(100% - 40px); margin:32px auto 48px; }
+.dredging-header { max-width:820px; }
+.dredging-eyebrow { color:var(--brand); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.dredging-header h1 { margin:6px 0 10px; font-size:clamp(26px,4vw,38px); line-height:1.15; }
+.dredging-header > p:last-child { color:var(--muted); line-height:1.6; }
+.forecast-status { margin:22px 0 16px; font-size:13px; color:var(--muted); }
+.forecast-error { padding:14px; color:#ffaaaa; border:1px solid #9a4848; border-radius:10px; }
+.dredging-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
+.dredging-summary > div { padding:18px; background:var(--panel); border:1px solid var(--border); border-radius:12px; }
+.dredging-summary span,.dredging-summary small { display:block; color:var(--muted); font-size:12px; line-height:1.5; }
+.dredging-summary strong { display:block; margin:8px 0 3px; font-size:25px; font-variant-numeric:tabular-nums; }
+.dredging-layout { display:grid; grid-template-columns:minmax(0,1fr) 315px; gap:20px; align-items:start; }
+.forecast-map-card,.forecast-panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.forecast-timeline { display:grid; grid-template-columns:1fr auto; gap:8px; padding:18px 20px 14px; }
+.forecast-timeline label,.forecast-timeline output { font-size:13px; font-weight:700; }
+.forecast-timeline input { grid-column:1 / -1; width:100%; margin:8px 0; accent-color:var(--brand); }
+.forecast-timeline p { grid-column:1 / -1; margin:0; font-size:12px; color:var(--muted); line-height:1.5; }
+#map { width:100%; height:clamp(400px,58vh,650px); background:#253b46; z-index:0; }
+.forecast-legend { padding:15px 20px; }
+#legend-gradient { width:100%; height:10px; border-radius:3px; }
+.legend-values { display:flex; justify-content:space-between; margin-top:5px; font-size:12px; }
+.forecast-legend p,.forecast-map-note { margin:7px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+.forecast-map-note { padding:0 20px 15px; }
+.forecast-sidebar { display:grid; gap:16px; }
+.forecast-panel { padding:20px; }
+.forecast-panel h2 { font-size:16px; margin:0 0 16px; }
+.forecast-panel > label { display:block; margin-top:16px; font-size:12px; font-weight:700; }
+.forecast-panel select { width:100%; max-width:100%; min-width:0; margin-top:7px; padding:10px 8px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:7px; font:inherit; font-size:12px; }
+.forecast-panel .forecast-checkbox { display:flex; align-items:flex-start; gap:8px; line-height:1.5; font-weight:400; }
+.forecast-checkbox input { margin-top:3px; accent-color:var(--brand); }
+.forecast-panel p { font-size:13px; line-height:1.65; margin:10px 0; }
+.forecast-panel .forecast-help { color:var(--muted); font-size:12px; }
+.forecast-download { display:block; margin-top:18px; padding:10px; border-radius:7px; background:var(--brand); color:#061524; text-align:center; text-decoration:none; font-size:13px; font-weight:700; }
+.forecast-download[aria-disabled="true"] { opacity:.45; pointer-events:none; }
+.forecast-score strong { font-size:28px; font-variant-numeric:tabular-nums; }
+.forecast-popup { color:#17212b; }
+.forecast-popup h3 { margin:0 0 10px; font-size:14px; }
+.forecast-popup p { margin:5px 0; font-size:12px; }
+.dredging-page select:focus-visible,.dredging-page input:focus-visible,.forecast-download:focus-visible { outline:3px solid var(--brand); outline-offset:3px; }
+@media(max-width:950px) { .dredging-layout { grid-template-columns:1fr; } .forecast-sidebar { grid-template-columns:1fr 1fr; } .forecast-sidebar > section:last-child { grid-column:1 / -1; } }
+@media(max-width:560px) { .dredging-page { width:calc(100% - 24px); margin-top:24px; } .dredging-summary { grid-template-columns:1fr 1fr; gap:8px; } .dredging-summary > div { padding:12px; } .dredging-summary strong { font-size:21px; } .forecast-sidebar { grid-template-columns:1fr; } .forecast-timeline { padding:14px; } #map { height:420px; } }
