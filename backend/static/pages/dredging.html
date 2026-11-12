@@ -6,6 +6,59 @@
 <title>Dredging · Aquatic Sustainability</title>
 <link rel="stylesheet" href="/static/css/styles.css" />
 <style>
+  :root {
+    --dredging-accent-color: #ec4899;
+  }
+
+  .toggle-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    padding: 7px 10px;
+    border: 2px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .toggle-btn.active {
+    background: var(--dredging-accent-color);
+    border-color: var(--dredging-accent-color);
+    color: white;
+  }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .legend-gradient {
+    height: 10px;
+    border-radius: 4px;
+    width: 100%;
+  }
+
+  .legend-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .legend-caption {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
   .filter-overlay {
     position: absolute;
     top: 20px;
@@ -49,22 +102,52 @@
 <main class="workspace">
 <section class="map-panel" style="position: relative;">
 
-  <div class="filter-overlay">
+<div class="filter-overlay" id="filterOverlay">
+  <div class="filter-section">
     <h3>Dredging</h3>
+  </div>
+
+  <div class="filter-section">
+    <div class="toggle-buttons">
+      <button class="toggle-btn active" data-mode="depth">Depth</button>
+      <button class="toggle-btn" data-mode="change">Change</button>
+    </div>
+
+    <div class="legend" style="margin-top: 10px;">
+      <div class="legend-gradient" id="legendGradient"></div>
+      <div class="legend-scale">
+        <span id="legendMin">–</span>
+        <span id="legendCaption" class="legend-caption">Depth (ft)</span>
+        <span id="legendMax">–</span>
+      </div>
+    </div>
+
     <div class="status-note">Model predictions coming soon.</div>
   </div>
+</div>
 
   <div id="map"></div>
 </section>
 </main>
 
 <script>
+  let map;
+  let dredgingPolygons = [];
+  let dredgingFeatures = [];
+  let currentMode = 'depth';
+
+  const COLORMAPS = {
+    depth:   [[255, 255, 255], [250, 204, 21],  [239, 68, 68]],   // white → yellow → red
+    change: [[255, 255, 255], [168, 85, 247],  [236, 72, 153]],  // white → purple → magenta
+  };
+  
   function initMap() {
-    new google.maps.Map(document.getElementById('map'), {
+    map = new google.maps.Map(document.getElementById('map'), {
       center: { lat: 61.2181, lng: -149.9003 },
       zoom: 9,
       mapTypeId: 'hybrid',
     });
+    loadDredgingPolygons();
   }
 
   fetch('/api/config/maps-key')
@@ -75,6 +158,150 @@
       script.async = true;
       document.head.appendChild(script);
     });
+
+  function renderDredgingPolygons(features, options = {}) {
+    const {
+      append = false,
+      mode = 'depth'
+    } = options;
+    if (!append) {
+      dredgingPolygons.forEach(polygon => polygon.setMap(null));
+      dredgingPolygons = [];
+    }
+
+    if (!Array.isArray(features)) {
+        console.warn('renderDredgingPolygons: invalid features', features);
+        return;
+    }
+
+    features.forEach(feature => {
+      if (
+          !feature ||
+          !feature.geometry ||
+          feature.geometry.type !== 'Polygon' ||
+          !Array.isArray(feature.geometry.coordinates) ||
+          !feature.geometry.coordinates[0] ||
+          !feature.properties ||
+          typeof feature.properties !== 'object'
+      ) {
+          console.warn('renderDredgingPolygons: skipping invalid feature', feature);
+          return;
+      }
+
+      const paths = feature.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
+
+      if (paths.some(vertex => !Number.isFinite(vertex.lat) || !Number.isFinite(vertex.lng))) {
+        console.warn('renderDredgingPolygons: skipping polygon with invalid boundary', feature);
+        return;
+      }
+
+      const value = mode === 'depth' ? feature.properties.depth_ft
+        : feature.properties.change_ft;  
+
+      let setting;
+
+      const color = colorForMetric(mode, value);
+
+      const polygon = new google.maps.Polygon({
+          paths: paths,
+          strokeColor: color,
+          strokeWeight: 3,
+          fillColor: color,
+          fillOpacity: 0.8,
+          map: map
+      });
+      dredgingPolygons.push(polygon);
+      
+    });
+
+  }
+  
+  async function loadDredgingPolygons() {
+    try {
+      const response = await fetch(
+          '/static/DredgingPoints/sampledata.geojson'
+      );
+      if (!response.ok) {
+          throw new Error(`Failed to load GeoJSON: ${response.status}`);
+      }
+      const geojson = await response.json();
+      dredgingFeatures = geojson.features;
+      wireControls();
+
+      renderDredgingPolygons(dredgingFeatures, {
+        mode: currentMode
+      });
+
+      renderLegend(currentMode);
+
+    } catch (error) {
+      console.error('Error loading dredging data:', error);
+    }
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function getMetricRange(mode) {
+    const property = mode === 'depth' ? 'depth_ft' : 'change_ft';
+    const values = dredgingFeatures
+      .map(feature => feature.properties[property])
+      .filter(Number.isFinite);
+    return {
+      min: Math.min(...values),
+      max: Math.max(...values)
+    };
+  }
+
+  function colorForMetric(metric, value) {
+    if (!Number.isFinite(value)) return '#9ca3af';
+    const { min, max } = getMetricRange(metric);
+    const span = max - min;
+    let t = span > 0 ? (value - min) / span : 0;
+    t = Math.max(0, Math.min(1, t));
+    const ramp = COLORMAPS[metric];
+    const mid = 0.5;
+    let c0, c1, localT;
+    if (t <= mid) { c0 = ramp[0]; c1 = ramp[1]; localT = t / mid; } 
+    else          { c0 = ramp[1]; c1 = ramp[2]; localT = (t - mid) / (1 - mid); }
+    const r = Math.round(lerp(c0[0], c1[0], localT));
+    const g = Math.round(lerp(c0[1], c1[1], localT));
+    const b = Math.round(lerp(c0[2], c1[2], localT));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  function gradientCss(metric) {
+    const ramp = COLORMAPS[metric];
+    const rgb = c => `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+    return `linear-gradient(to right, ${rgb(ramp[0])}, ${rgb(ramp[1])}, ${rgb(ramp[2])})`;
+  }
+
+  function renderLegend(metric) {
+    const { min, max } = getMetricRange(metric);
+    document.getElementById('legendGradient').style.background =
+      gradientCss(metric);
+    document.getElementById('legendCaption').textContent =
+      metric === 'depth' ? 'Depth (ft)' : 'Change (ft)';
+    document.getElementById('legendMin').textContent = min.toFixed(2);
+    document.getElementById('legendMax').textContent = max.toFixed(2);
+  }
+
+  function wireControls() {
+    document.querySelectorAll('[data-mode]').forEach(button => {
+      button.addEventListener('click', () => {
+        currentMode = button.dataset.mode;
+        document.querySelectorAll('[data-mode]').forEach(b => {
+          b.classList.toggle('active', b === button);
+        });
+        renderDredgingPolygons(dredgingFeatures, {
+          mode: currentMode
+        });
+        renderLegend(currentMode);
+      });
+    });
+  }
+
 </script>
 
 <script src="/static/js/components/navbar.js" defer></script>
