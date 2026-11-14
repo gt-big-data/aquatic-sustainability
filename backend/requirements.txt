@@ -21,3 +21,4 @@ redis
 rq
 scikit-learn
 newsapi-python
+h3>=4.0

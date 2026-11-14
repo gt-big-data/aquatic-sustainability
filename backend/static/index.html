@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Aquatic Sustainability</title>
-<link rel="icon" href="assets/images/favicon.ico" />
+<link rel="icon" href="/icon.svg" />
 <link rel="stylesheet" href="/static/css/styles.css" />
 <meta name="description" content="Analyzing watershed anomalies and water affordability to protect at-risk communities and support UN Clean Water goals." />
 <style>
@@ -74,6 +74,51 @@
   @media (max-width: 640px) {
     .map-cards { grid-template-columns: 1fr; }
   }
+
+  .tools-title {
+    font-size: 1.5rem;
+    margin: 0 0 24px;
+  }
+
+  /* 2x2 grid */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+
+  /* Individual cards */
+  .card {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 16px;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  html:not(.light) .card {
+    background: #1c1c1c;
+    border-color: #2e2e2e;
+  }
+
+  .card h2 {
+    font-size: 1.5rem;
+    margin: 0 0 12px;
+  }
+
+  .card p {
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
+
+  .card-link {
+    color: #7aa7ff;
+    text-decoration: none;
+  }
+
+  /* Stack to one column on phones */
+  @media (max-width: 700px) {
+    .cards { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -129,7 +174,7 @@ Explore flood and drought risk across communities and track predicted coral blea
 
 
 <footer class="site-footer">
-<small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water & Sanitation</small>
+<small>© <span id="year"></span> Aquatic Sustainability · UN SDG 6: Clean Water &amp; Sanitation</small>
 </footer>
 
 

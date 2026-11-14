@@ -61,6 +61,10 @@ def create_app():
     @app.route("/coral-bleaching")
     def coralBleaching():
         return send_from_directory(app.static_folder + "/pages", "coral-bleaching.html")
+    # Dredging Depth Prediction
+    @app.route("/dredging")
+    def dredging():
+        return send_from_directory(app.static_folder + "/pages", "dredging.html")
     # Water Resources & Availability
     @app.route("/water")
     def water():
@@ -69,6 +73,11 @@ def create_app():
     @app.route("/news")
     def news():
         return send_from_directory(app.static_folder + "/pages", "news.html")
+
+    # OAuth callback — Supabase redirects here after Google sign-in
+    @app.route("/auth/callback")
+    def auth_callback():
+        return send_from_directory(app.static_folder + "/pages", "auth-callback.html")
 
     # Pages routes
     #@app.route("/pages/flood-drought.html")
