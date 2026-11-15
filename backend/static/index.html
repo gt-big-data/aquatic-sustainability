@@ -9,6 +9,9 @@
 <meta name="description" content="Analyzing watershed anomalies and water affordability to protect at-risk communities and support UN Clean Water goals." />
 <style>
   body {
+    height: auto;
+    min-height: 100vh;
+    isolation: isolate;
     background-image: url('/static/assets/images/Algal-Bloom.png');
     background-size: cover;
     background-position: center;
@@ -33,44 +36,43 @@
     background: rgba(10, 10, 10, 0.55);
   }
 
-  .site-header {
-    background: rgba(255, 255, 255, 0.95) !important;
-    backdrop-filter: blur(10px);
-    transition: background-color 0.3s ease;
+  main.container.narrow {
+    width: 100%; display: grid; gap: clamp(18px, 3vw, 28px);
+    margin-block: clamp(18px, 3vw, 32px);
   }
-
-  html:not(.light) .site-header {
-    background: rgba(26, 26, 26, 0.95) !important;
-  }
-
   .hero {
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 16px;
-    padding: 48px 32px;
-    margin-bottom: 32px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    padding: clamp(24px, 5vw, 54px); border-radius: 18px; color: white;
+    background: linear-gradient(100deg, #172c27 5%, rgba(23,44,39,.96) 50%, rgba(37,61,48,.72)),
+      url('/static/assets/images/Algal-Bloom.png') center / cover;
   }
-
-  html:not(.light) .hero {
-    background: rgba(26, 26, 26, 0.9);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  .hero h1 { margin: 0; max-width: 17ch; font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.07; letter-spacing: -.035em; }
+  .hero .lead { color: #e1e8df; max-width: 48ch; margin: 16px 0 0; }
+  .hero .cta-row { margin-top: 24px; flex-wrap: wrap; }
+  .hero .btn { background: #d8e3ce; color: #21372d; border-color: transparent; text-decoration: none; }
+  .hero .btn-outline { background: #263d33; color: white; border-color: #98ac9a; }
+  .hero .btn:hover { text-decoration: underline; }
+  .project-intro {
+    padding: clamp(20px, 4vw, 32px);
+    background: var(--panel);
+    border-inline-start: 4px solid #91aa82;
+    border-radius: 12px;
   }
-
-  /* Outer box */
-  .tools {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: 16px;
-    padding: 24px 32px 32px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
-  }
-
-  html:not(.light) .tools {
-    background: rgba(26, 26, 26, 0.9);
-    border-color: #2e2e2e;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  .project-intro p { max-width: 72ch; margin: 0; line-height: 1.65; }
+  .home-panel > h2 { margin: 0 0 14px; }
+  .map-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card { display: flex; flex-direction: column; align-items: flex-start; padding: clamp(18px, 3vw, 28px); border-top: 4px solid #368fa7; }
+  .card + .card { border-top-color: #cb7961; }
+  .card h3 { margin: 0; font-size: 1.25rem; }
+  .card p { margin: 10px 0 20px; color: var(--muted); }
+  .card-link { font-weight: 600; }
+  .card .card-link { margin-top: auto; }
+  .news-panel { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px;
+    padding: 18px 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  .news-panel h3 { margin: 0; font-size: 1.1rem; }
+  .news-panel p { margin: 4px 0 0; color: var(--muted); }
+  .news-panel .card-link { margin: 0; }
+  @media (max-width: 640px) {
+    .map-cards { grid-template-columns: 1fr; }
   }
 
   .tools-title {
@@ -127,42 +129,45 @@
 <section class="hero">
 <h1>Protecting Water. Protecting People.</h1>
 <p class="lead">
-Analyzing watershed anomalies and water affordability patterns to protect at‑risk communities and support UN Clean Water goals.
+Explore flood and drought risk across communities and track predicted coral bleaching on the Great Barrier Reef.
 </p>
 <div class="cta-row">
 <a class="btn" href="/flood-drought">Explore Flood/Drought</a>
-<a class="btn btn-outline" href="/oil-spill">Explore Oil Spill</a>
+<a class="btn btn-outline" href="/coral-bleaching">Explore Coral Bleaching</a>
 </div>
 </section>
 
-<section class="description">
-  <h3><strong>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</strong></h3>
+<section class="home-panel" aria-labelledby="project-title">
+  <h2 id="project-title">About the Project</h2>
+  <div class="project-intro">
+    <p>This project is focused on identifying patterns in water-related disasters and affordability across different communities using advanced data analytics. By analyzing watershed data, economic indicators, and environmental factors, we developed predictive models to identify at-risk communities and provide actionable insights for sustainable water management and policy decisions.</p>
+  </div>
 </section>
 
-<section class="tools">
-  <h2 class="tools-title">Tools and updates</h2>
-
-  <div class="cards">
+<section class="home-panel" aria-labelledby="maps-title">
+  <h2 id="maps-title">Explore the Maps</h2>
+  <div class="map-cards">
     <article class="card">
-      <h2>Flood/Drought Vulnerability</h2>
+      <h3>Flood/Drought Vulnerability</h3>
       <p>View predicted flood/drought risk and overlay affordability &amp; incident annotations.</p>
-      <a class="card-link" href="/flood-drought">Open tool →</a>
+      <a class="card-link" href="/flood-drought">Explore flood and drought risk →</a>
     </article>
     <article class="card">
-      <h2>Coral Bleaching Risk</h2>
-      <p>Monitor weekly coral bleaching predictions across the Great Barrier Reef with thermal stress indicators.</p>
-      <a class="card-link" href="/coral-bleaching">Open tool →</a>
+      <h3>Coral Bleaching Risk</h3>
+      <p>Explore weekly bleaching predictions across the Great Barrier Reef. Select a reef to see its risk trend.</p>
+      <a class="card-link" href="/coral-bleaching">Explore reef predictions →</a>
     </article>
-    <article class="card">
-      <h2>Oil Spill Detection</h2>
-      <p>Investigate near‑real‑time spill detections and patterns across marine regions.</p>
-      <a class="card-link" href="/oil-spill">Open tool →</a>
-    </article>
-    <article class="card">
-      <h2>News &amp; Updates</h2>
-      <p>Stay informed with the latest news and updates in aquatic sustainability research.</p>
-      <a class="card-link" href="/news">View News →</a>
-    </article>
+  </div>
+</section>
+
+<section class="home-panel" aria-labelledby="news-title">
+  <h2 id="news-title">Stay up to Date</h2>
+  <div class="news-panel">
+    <div>
+      <h3>News &amp; Updates</h3>
+      <p>Follow the latest aquatic sustainability research.</p>
+    </div>
+    <a class="card-link" href="/news">Read the news →</a>
   </div>
 </section>
 </main>
