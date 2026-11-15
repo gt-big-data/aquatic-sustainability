@@ -189,12 +189,26 @@
     depth:   [[255, 255, 255], [250, 204, 21],  [239, 68, 68]],   // white → yellow → red
     change: [[255, 255, 255], [168, 85, 247],  [236, 72, 153]],  // white → purple → magenta
   };
+
+  const HIDDEN_MAP_FEATURES = [
+    {
+      featureType: 'poi.business',
+      stylers: [{ visibility: 'off' }],
+    },
+    {
+      featureType: 'transit',
+      elementType: 'labels.icon',
+      stylers: [{ visibility: 'off' }],
+    },
+  ];
   
   function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
       center: { lat: 61.2254, lng: -149.9051 },
       zoom: 14,
       mapTypeId: 'hybrid',
+      renderingType: 'RASTER',
+      styles: HIDDEN_MAP_FEATURES,
     });
     loadDredgingPolygons();
   }
