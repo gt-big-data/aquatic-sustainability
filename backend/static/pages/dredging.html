@@ -70,8 +70,51 @@
     padding: 16px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     width: 280px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    box-sizing: border-box;
     backdrop-filter: blur(10px);
     transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+
+  .dist-section {
+    margin: 14px 0 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .dist-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .dist-chart {
+    position: relative;
+    height: 160px;
+    width: 100%;
+  }
+
+  .dist-stats {
+    width: 100%;
+    margin-top: 10px;
+    font-size: 12px;
+    border-collapse: collapse;
+    color: var(--text);
+  }
+
+  .dist-stats th {
+    padding: 2px 0;
+    text-align: left;
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  .dist-stats td {
+    padding: 2px 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   .filter-overlay h3 {
@@ -122,6 +165,11 @@
       </div>
     </div>
 
+    <div class="dist-section" aria-labelledby="distTitle">
+      <h4 id="distTitle">Depth distribution</h4>
+      <div id="distContent"></div>
+    </div>
+
     <div class="status-note">Model predictions coming soon.</div>
   </div>
 </div>
@@ -130,6 +178,7 @@
 </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   let map;
   let dredgingPolygons = [];
@@ -233,6 +282,7 @@
       });
 
       renderLegend(currentMode);
+      renderDistribution(currentMode);
 
     } catch (error) {
       console.error('Error loading dredging data:', error);
@@ -243,11 +293,15 @@
     return a + (b - a) * t;
   }
 
-  function getMetricRange(mode) {
+  function getMetricValues(mode) {
     const property = mode === 'depth' ? 'depth_ft' : 'change_ft';
-    const values = dredgingFeatures
+    return dredgingFeatures
       .map(feature => feature.properties[property])
       .filter(Number.isFinite);
+  }
+
+  function getMetricRange(mode) {
+    const values = getMetricValues(mode);
     return {
       min: Math.min(...values),
       max: Math.max(...values)
@@ -287,6 +341,168 @@
     document.getElementById('legendMax').textContent = max.toFixed(2);
   }
 
+  // Picks a round bin width (1, 2, 2.5 or 5 times a power of ten) close to
+  // what the square-root rule asks for, clamped to 5–10 bins.
+  function niceBinWidth(min, max, count) {
+    const targetBins = Math.max(5, Math.min(10, Math.ceil(Math.sqrt(count))));
+    const raw = (max - min) / targetBins || Math.abs(max) / targetBins || 1;
+    const magnitude = 10 ** Math.floor(Math.log10(raw));
+    const binsFor = c => Math.floor(max / c) - Math.floor(min / c) + 1;
+    const candidates = [1, 2, 2.5, 5, 10, 20]
+      .map(m => parseFloat((m * magnitude).toPrecision(3)))
+      .filter(c => binsFor(c) <= 10);
+    return candidates.reduce((best, c) =>
+      Math.abs(Math.log(c / raw)) < Math.abs(Math.log(best / raw)) ? c : best
+    );
+  }
+
+  // Bins whose edges are multiples of the width, so edges land on round numbers
+  // and 0 is always an edge when the data spans it. Each bin includes its start
+  // and excludes its end.
+  function buildHistogram(values, min, max) {
+    const width = niceBinWidth(min, max, values.length);
+    // Epsilon keeps float error (e.g. 0.3 / 0.1 = 2.999…) from shifting a value down a bin.
+    const binIndex = value => Math.floor(value / width + 1e-9);
+    const first = binIndex(min);
+    const last = binIndex(max);
+    const bins = [];
+    for (let i = first; i <= last; i++) {
+      bins.push({
+        start: parseFloat((i * width).toPrecision(12)),
+        end: parseFloat(((i + 1) * width).toPrecision(12)),
+        count: 0,
+      });
+    }
+    values.forEach(value => {
+      bins[binIndex(value) - first].count++;
+    });
+    const decimals = (String(width).split('.')[1] || '').length;
+    return { bins, width, decimals };
+  }
+
+  function median(values) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  let distChart = null;
+
+  function renderDistribution(metric) {
+    const content = document.getElementById('distContent');
+    const label = metric === 'depth' ? 'Depth' : 'Change';
+    document.getElementById('distTitle').textContent = `${label} distribution`;
+    if (distChart) {
+      distChart.destroy();
+      distChart = null;
+    }
+    content.replaceChildren();
+
+    const values = getMetricValues(metric);
+    if (values.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'status-note';
+      empty.textContent = 'No data points to summarize.';
+      content.append(empty);
+      return;
+    }
+
+    const { min, max } = getMetricRange(metric);
+    const { bins, width, decimals } = buildHistogram(values, min, max);
+
+    if (typeof Chart === 'undefined') {
+      const error = document.createElement('p');
+      error.className = 'status-note';
+      error.textContent = 'Chart could not load. Summary values are listed below.';
+      content.append(error);
+    } else {
+      const container = document.createElement('div');
+      container.className = 'dist-chart';
+      const canvas = document.createElement('canvas');
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', `Histogram of ${label.toLowerCase()} in feet across ${values.length} dredging areas. Summary values follow in the table.`);
+      container.append(canvas);
+      content.append(container);
+      const styles = getComputedStyle(content);
+      const textColor = styles.getPropertyValue('--text').trim();
+      const mutedColor = styles.getPropertyValue('--muted').trim();
+      const gridColor = styles.getPropertyValue('--border').trim();
+      const fmt = value => value.toFixed(decimals).replace('-', '−');
+      const lo = bins[0].start;
+      const hi = bins[bins.length - 1].end;
+      distChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          datasets: [{
+            label: 'Areas',
+            // Linear x axis with bars centered in each bin, so ticks sit on the bin edges.
+            data: bins.map(bin => ({ x: (bin.start + bin.end) / 2, y: bin.count, start: bin.start, end: bin.end })),
+            // Bars use the same ramp as the map so colors read the same in both places.
+            backgroundColor: bins.map(bin => colorForMetric(metric, (bin.start + bin.end) / 2)),
+            borderColor: mutedColor,
+            borderWidth: 1,
+            barPercentage: 1,
+            categoryPercentage: 1,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: items => `${label}: ${fmt(items[0].raw.start)} to ${fmt(items[0].raw.end)} ft`,
+                label: item => `${item.parsed.y} ${item.parsed.y === 1 ? 'area' : 'areas'}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              min: lo,
+              max: hi,
+              offset: false,
+              title: { display: true, text: `${label} (ft)`, color: textColor, font: { size: 11 } },
+              ticks: { color: textColor, font: { size: 10 }, stepSize: width, maxRotation: 0, callback: value => fmt(value) },
+              // Only the zero line is drawn, so gains and losses read as separate sides in Change mode.
+              // Chart.js also calls this for grid lines without a tick, so ctx.tick can be undefined.
+              grid: { color: ctx => ctx.tick && Math.abs(ctx.tick.value) < width / 1000 ? mutedColor : 'transparent', lineWidth: 1.5 },
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Areas', color: textColor, font: { size: 11 } },
+              ticks: { color: textColor, precision: 0 },
+              grid: { color: gridColor },
+            },
+          },
+        },
+      });
+    }
+
+    const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+    const stats = [
+      ['Areas', String(values.length)],
+      ['Min', `${min.toFixed(2)} ft`],
+      ['Median', `${median(values).toFixed(2)} ft`],
+      ['Mean', `${mean.toFixed(2)} ft`],
+      ['Max', `${max.toFixed(2)} ft`],
+    ];
+    const table = document.createElement('table');
+    table.className = 'dist-stats';
+    const body = table.createTBody();
+    stats.forEach(([name, value]) => {
+      const row = body.insertRow();
+      const th = document.createElement('th');
+      th.scope = 'row';
+      th.textContent = name;
+      row.append(th);
+      row.insertCell().textContent = value;
+    });
+    content.append(table);
+  }
+
   function wireControls() {
     document.querySelectorAll('[data-mode]').forEach(button => {
       button.addEventListener('click', () => {
@@ -298,6 +514,7 @@
           mode: currentMode
         });
         renderLegend(currentMode);
+        renderDistribution(currentMode);
       });
     });
   }
