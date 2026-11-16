@@ -23,3 +23,6 @@ crw_gbr_nc_yearly
 
 # Python virtual environment
 venv/
+
+# Data
+anchorage/
