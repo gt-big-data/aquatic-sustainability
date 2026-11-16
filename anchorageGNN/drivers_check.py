@@ -1,7 +1,7 @@
-"""Sanity-check the v2 drivers and figure out how much the channel shoals?
+"""Step 1 + 2: sanity-check the v2 drivers, then ask: do they explain how much the channel shoals?
 
 Usage: python drivers_check.py --data path/to/timeseries_v2/timeseries.npz
-Predicts the SAMPLE-LEVEL average depth change
+Nothing here trains a neural network. It predicts the SAMPLE-LEVEL average depth change
 (and the share of cells shoaling > 1 ft) with a small ridge regression, scored leave-one-year-out.
 """
 import argparse
@@ -47,8 +47,14 @@ print('\nAlignment: recompute each *_before from its daily series and compare to
 for k, (s, how) in checks.items():
     r, st = recompute(s, how), d[k]
     both = ~np.isnan(r) & ~np.isnan(st)
-    print(f'  {k:22s} max abs diff {np.abs(r[both] - st[both]).max():.4g}   '
+    diff = np.abs(r - st)
+    print(f'  {k:22s} max abs diff {np.nanmax(diff):.4g}   '
           f'NaN pattern differs on {int((np.isnan(r) != np.isnan(st)).sum())} maps')
+    bad = np.where(diff > 0.01)[0]
+    if len(bad):
+        print(f'    -> {len(bad)} maps differ by > 0.01; first few:')
+        for p_ in bad[:8]:
+            print(f'       {dates[p_].date()}  stored {st[p_]:.2f}  recomputed {r[p_]:.2f}')
 
 # ------------------------------------------------------------------ 2. do drivers explain shoaling?
 print('\n== 2. Do the drivers explain shoaling? (leave-one-year-out ridge, sample level) ==')
@@ -58,7 +64,7 @@ n = masks.reshape(len(W), -1).sum(1)
 y_mean = np.where(masks, delta, 0).reshape(len(W), -1).sum(1) / n            # avg change over graded cells
 y_hot = ((delta < -1) & masks).reshape(len(W), -1).sum(1) / n                 # share of cells shoaling > 1 ft
 year = pd.DatetimeIndex(d['dates'])[W[:, -1]].year.values
-doy = pd.DatetimeIndex(d['dates'])[W[:, -2]].dayofyear.values / 365.0
+doy = pd.DatetimeIndex(d['dates'])[W[:, -2]].day_of_year.values / 365.0
 season = {'season_sin': np.sin(2 * np.pi * doy), 'season_cos': np.cos(2 * np.pi * doy)}
 print(f'{len(W)} samples, {len(set(year))} target years;  avg change per sample: mean {y_mean.mean():+.3f} ft, sd {y_mean.std():.3f}')
 
