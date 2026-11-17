@@ -9,7 +9,10 @@ Needs: pip install matplotlib   (anchorage_gnn.py must be in the same folder)
 """
 import argparse
 import numpy as np, torch
-from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import precision_recall_curve, roc_auc_score, average_precision_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.isotonic import IsotonicRegression
 import anchorage_gnn as G
 
 
@@ -33,6 +36,7 @@ if __name__ == '__main__':
     ap.add_argument('--hidden', type=int, default=64)
     ap.add_argument('--layers', type=int, default=3)
     ap.add_argument('--out', default='hotspot_map.png')
+    ap.add_argument('--calib', choices=['platt', 'isotonic'], default='platt', help='probability calibration fitted on validation')
     a = ap.parse_args()
 
     dev = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
@@ -55,34 +59,71 @@ if __name__ == '__main__':
     rate = L(tr).sum(0) / np.maximum(M[tr].sum(0), 1)           # each cell's historical hot-spot rate
     scores['per-cell history'] = {sp: np.broadcast_to(rate, Y[ids].shape) for sp, ids in (('val', va), ('test', te))}
 
+    # ---- simple non-graph rivals built from the depth maps themselves
+    Dm = d['maps'][d['windows'][:, :-1]][:, :, core]                    # (S, K, N) the input depths
+    trend = np.nan_to_num(Dm[:, -1] - Dm[:, 0])                         # depth change across the input window (negative = shoaling)
+    step = np.nan_to_num(Dm[:, -1] - Dm[:, -2])                         # change over the last interval
+    with np.errstate(all='ignore'):
+        cmean = np.nanmean(Dm[tr][:, -1], 0)
+    rel = np.nan_to_num(Dm[:, -1] - np.where(np.isnan(cmean), np.nanmean(cmean), cmean))
+    scores['recent trend'] = {sp: -trend[ids] for sp, ids in (('val', va), ('test', te))}   # "already shoaling -> keeps shoaling"
+    F = np.stack([trend, step, np.broadcast_to(rate, trend.shape), rel], -1).astype(np.float32)
+    ii = np.argwhere(M & (split == 'train')[:, None])
+    ii = ii[np.random.default_rng(0).choice(len(ii), min(400_000, len(ii)), replace=False)]
+    sc = StandardScaler().fit(F[ii[:, 0], ii[:, 1]])
+    lr = LogisticRegression(max_iter=500).fit(sc.transform(F[ii[:, 0], ii[:, 1]]), ((Y < G.HOT) & M)[ii[:, 0], ii[:, 1]])
+    scores['logistic: trend+history'] = {sp: lr.decision_function(sc.transform(F[ids].reshape(-1, 4))).reshape(Y[ids].shape)
+                                         for sp, ids in (('val', va), ('test', te))}
+
     # ---- precision / recall at a cutoff chosen on validation
     print('\nCutoff chosen on VALIDATION (maximises F1), applied to TEST')
-    print(f'{"model":<18}{"flagged":>9}{"precision":>11}{"recall":>9}{"F1":>7}')
+    print(f'{"model":<26}{"flagged":>9}{"precision":>11}{"recall":>9}{"F1":>7}{"AUROC":>8}{"AP":>7}')
     thr = {}
     for name, s in scores.items():
         thr[name] = pick_threshold(s['val'][M[va]], L(va)[M[va]])
         p, r, f, fl = prf((s['test'] >= thr[name])[M[te]], L(te)[M[te]])
-        print(f'{name:<18}{fl:9.1%}{p:11.2f}{r:9.2f}{f:7.2f}')
+        yy = L(te)[M[te]]; ss = s['test'][M[te]]
+        print(f'{name:<26}{fl:9.1%}{p:11.2f}{r:9.2f}{f:7.2f}{roc_auc_score(yy, ss):8.3f}{average_precision_score(yy, ss):7.3f}')
     print(f'(a model with no skill flagging the same share would have precision ~ {L(te).sum() / M[te].sum():.2f})')
 
     print('\nIf you flag only the top X% highest-scoring test cells')
-    print(f'{"model":<18}' + ''.join(f'{f"top {k}%":>16}' for k in (5, 10, 20)) + '      (precision / recall)')
+    print(f'{"model":<26}' + ''.join(f'{f"top {k}%":>16}' for k in (5, 10, 20)) + '      (precision / recall)')
     for name, s in scores.items():
-        row = f'{name:<18}'
+        row = f'{name:<26}'
         for k in (5, 10, 20):
             t = np.quantile(s['test'][M[te]], 1 - k / 100)
             p, r, _, _ = prf((s['test'] >= t)[M[te]], L(te)[M[te]])
             row += f'{p:9.2f} /{r:5.2f} '
         print(row)
 
-    # ---- is the probability trustworthy?
-    pr = 1 / (1 + np.exp(-scores['GNN']['test']))
-    print('\nGNN probabilities vs what happened (test): when it says X%, how often is it a hot spot?')
+    # ---- calibration: fit on VALIDATION, check on TEST
+    lv, lt = scores['GNN']['val'][M[va]], scores['GNN']['test'][M[te]]
+    yv, yt = L(va)[M[va]], L(te)[M[te]]
+    sig = lambda z: 1 / (1 + np.exp(-z))
+    platt = LogisticRegression(C=1e6, max_iter=500).fit(lv[:, None], yv)
+    iso = IsotonicRegression(out_of_bounds='clip').fit(sig(lv), yv)
+    cands = {'raw': sig(lt), 'platt': platt.predict_proba(lt[:, None])[:, 1], 'isotonic': iso.predict(sig(lt))}
+    def ece(p, y):
+        b_ = np.minimum((p * 10).astype(int), 9)
+        return sum(abs(p[b_ == k].mean() - y[b_ == k].mean()) * (b_ == k).mean() for k in range(10) if (b_ == k).any())
+    print('\nCalibration on TEST (lower = better; Brier of always predicting the base rate = '
+          f'{((yt.mean() - yt) ** 2).mean():.3f})')
+    for k_, p_ in cands.items():
+        print(f'  {k_:<9} Brier {((p_ - yt) ** 2).mean():.4f}   mean predicted {p_.mean():.3f} (actual {yt.mean():.3f})   ECE {ece(p_, yt):.3f}')
+    fn = (lambda z: platt.predict_proba(z.reshape(-1, 1))[:, 1].reshape(z.shape)) if a.calib == 'platt' else \
+         (lambda z: iso.predict(sig(z).ravel()).reshape(z.shape))
+    pr = fn(scores['GNN']['test'])                                      # calibrated test probabilities, used below and in the map
+    print(f'\nGNN probabilities ({a.calib}-calibrated): when it says X%, how often is it a hot spot? (test)')
     edges = [0, .05, .1, .2, .35, .5, .75, 1.0001]
     for lo, hi in zip(edges[:-1], edges[1:]):
         m = M[te] & (pr >= lo) & (pr < hi)
         if m.sum():
             print(f'  predicted {lo:4.0%}-{min(hi, 1):4.0%}   cells {m.sum():8d}   actual hot-spot rate {L(te)[m].mean():5.1%}')
+    print('\nUsing the calibrated probability directly as the cutoff (test)')
+    print(f'{"flag if P >=":<14}{"flagged":>9}{"precision":>11}{"recall":>9}')
+    for t_ in (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8):
+        p_, r_, _, fl_ = prf((pr >= t_)[M[te]], yt)
+        print(f'{t_:<14.0%}{fl_:9.1%}{p_:11.2f}{r_:9.2f}')
 
     # ---- per-year at the chosen cutoff
     print('\nGNN by test year (same cutoff)')
