@@ -3,48 +3,60 @@ import time
 
 import numpy as np
 
-from common import Data, evaluate
+from common import DATA, Data, evaluate
 
 t0 = time.time()
 D = Data()
+L = 12
+series = np.loadtxt(DATA.replace('timeseries.npz', 'timeseries_surveys.csv'), delimiter=',', skiprows=1,
+                    usecols=11, dtype=str).astype(int)
 
 
-def holt(idx, alpha, beta, phi, w, kappa):
-    inp = D.inputs[idx].astype(np.float64)
-    t = D.in_days[idx].astype(np.float64)
-    level = inp[:, 0].copy()
+def history(idx):
+    last = D.windows[idx, 3]
+    pos = last[:, None] - np.arange(L - 1, -1, -1)[None]
+    ok = (pos >= 0) & (series[np.clip(pos, 0, None)] == series[last][:, None])
+    pos = np.clip(pos, 0, None)
+    x = D.maps[pos].astype(np.float64)
+    x[~ok] = np.nan
+    dred = D.dredged[pos] & ok[:, :, None, None]
+    after = np.flip(np.cumsum(np.flip(dred, 1), 1), 1) > dred
+    x[after] = np.nan
+    return x, np.where(ok, D.days[pos], D.days[last][:, None]).astype(np.float64)
+
+
+def holt(x, t, idx, alpha, beta, phi, w, kappa):
+    level = np.full(x.shape[:1] + x.shape[2:], np.nan)
     trend = np.zeros_like(level)
-    seen = ~np.isnan(level)
-    level = np.where(seen, level, 0)
-    for k in range(1, 4):
-        dt = (t[:, k] - t[:, k - 1])[:, None, None]
-        x = inp[:, k]
-        ok = ~np.isnan(x)
-        fc = level + trend * dt
-        new_level = np.where(seen, alpha * x + (1 - alpha) * fc, x)
-        new_trend = np.where(seen, beta * (new_level - level) / dt + (1 - beta) * trend, 0)
-        level = np.where(ok, new_level, np.where(seen, fc, level))
-        trend = np.where(ok, new_trend, trend)
-        seen |= ok
+    for k in range(L):
+        dt = (t[:, k] - t[:, k - 1])[:, None, None] if k else np.ones((len(t), 1, 1))
+        xk = x[:, k]
+        ok = ~np.isnan(xk)
+        seen = ~np.isnan(level)
+        fc = np.where(seen, level + trend * dt, np.nan)
+        nl = np.where(seen, alpha * xk + (1 - alpha) * fc, xk)
+        nt = np.where(seen, beta * (nl - level) / dt + (1 - beta) * trend, 0)
+        level = np.where(ok, nl, fc)
+        trend = np.where(ok, nt, trend)
     h = D.horizon[idx][:, None, None]
     damp = phi * (1 - phi ** (h / 7)) / (1 - phi) * 7 / np.maximum(h, 1) if phi < 1 else 1.0
-    clim = D.rate_harm[idx] * h
-    return (level - D.last[idx]) + kappa * trend * h * damp + w * clim
-
-
-def mae(p, idx):
-    m = D.masks[idx]
-    return np.abs(np.where(m, p, 0) - D.change[idx])[m].mean()
+    return np.nan_to_num((level - D.last[idx]) + kappa * trend * h * damp + w * D.rate_harm[idx] * h)
 
 
 tr = D.idx['train']
-grid = itertools.product([0.5, 0.8, 1.0], [0.1, 0.3, 0.6, 1.0], [0.5, 0.8, 0.95], [0.8, 1.0, 1.2], [-0.6, -0.3, 0.0, 0.3])
+xt, tt = history(tr)
+m = D.masks[tr]
+grid = itertools.product([0.2, 0.35, 0.5, 0.7, 1.0], [0.05, 0.2, 0.5], [0.5, 0.9], [0.9, 1.0, 1.15], [-0.3, 0.0, 0.3])
 best = None
-for a, b, ph, w, kp in grid:
-    s = mae(holt(tr, a, b, ph, w, kp), tr)
+for g in grid:
+    s = np.abs(holt(xt, tt, tr, *g) - D.change[tr])[m].mean()
     if best is None or s < best[0]:
-        best = (s, a, b, ph, w, kp)
-print('train best', best)
-_, a, b, ph, w, kp = best
-preds = {k: np.nan_to_num(holt(D.idx[k], a, b, ph, w, kp)).astype(np.float32) for k in ['val', 'test']}
-evaluate(D, preds, 'm04_damped_holt', {'alpha': a, 'beta': b, 'phi': ph, 'clim_weight': w, 'trend_weight': kp}, t0)
+        best = (s, g)
+print('train best', best, flush=True)
+g = best[1]
+preds = {}
+for k in ['val', 'test']:
+    x, t = history(D.idx[k])
+    preds[k] = holt(x, t, D.idx[k], *g).astype(np.float32)
+evaluate(D, preds, 'm04_damped_holt', dict(zip(['alpha', 'beta', 'phi', 'clim_weight', 'trend_weight'], g),
+                                           history_maps=L), t0)

@@ -1,27 +1,26 @@
 import time
 
-import lightgbm as lgb
 import numpy as np
 
+import gbm
 from common import Data, evaluate, tabular, unflatten
 
 t0 = time.time()
 D = Data()
-tab, names = tabular(D)
+tab, names = tabular(D, max_train_rows=1_500_000)
+X, y, _ = tab['train']
 rng = np.random.default_rng(0)
-Xtr, ytr, _ = tab['train']
-sub = rng.choice(len(ytr), min(800_000, len(ytr)), replace=False)
-vsub = rng.choice(len(tab['val'][1]), 200_000, replace=False)
+s = rng.choice(len(y), 500_000, replace=False)
+v = rng.choice(len(tab['val'][1]), 200_000, replace=False)
+Xv, yv = tab['val'][0][v], tab['val'][1][v]
 
-params = dict(objective='l1', learning_rate=0.05, num_leaves=63, min_data_in_leaf=200,
-              feature_fraction=0.8, bagging_fraction=0.8, bagging_freq=1, lambda_l2=1.0,
-              verbose=-1, num_threads=2, seed=0)
-dtr = lgb.Dataset(Xtr[sub], ytr[sub], feature_name=names)
-dva = lgb.Dataset(tab['val'][0][vsub], tab['val'][1][vsub], reference=dtr)
-model = lgb.train(params, dtr, 3000, valid_sets=[dva],
-                  callbacks=[lgb.early_stopping(100), lgb.log_evaluation(200)])
-
-imp = sorted(zip(names, model.feature_importance('gain')), key=lambda x: -x[1])[:10]
-preds = {k: unflatten(D, k, model.predict(tab[k][0], num_iteration=model.best_iteration)) for k in ['val', 'test']}
-evaluate(D, preds, 'm02_lightgbm', {'best_iter': model.best_iteration,
-                                    'top_features': [n for n, _ in imp]}, t0)
+trials = gbm.search(X[s], y[s], names, Xv, yv, n=14)
+top = [t[1] for t in trials[:3]]
+models = [gbm.fit(p, X, y, names, Xv, yv, lr=0.03, seed=k) for k, p in enumerate(top)]
+pred = lambda Z: np.mean([gbm.predict(m, p, Z, names) for m, p in zip(models, top)], 0)
+preds = {k: unflatten(D, k, pred(tab[k][0])) for k in ['val', 'test']}
+imp = np.mean([m.feature_importance('gain') for m in models], 0)
+clean = lambda p: {k: (v if isinstance(v, str) else float(v)) for k, v in p.items()}
+evaluate(D, preds, 'm02_lightgbm', {'params': clean(top[0]), 'ensemble': [clean(p) for p in top],
+                                    'iters': [m.best_iteration for m in models],
+                                    'top_features': [names[i] for i in np.argsort(-imp)[:10]]}, t0)
