@@ -8,20 +8,20 @@ The target is the change from the last observed depth map to a map 28 days later
 
 | Model | Inputs | Test MAE, ft |
 | --- | --- | ---: |
-| XGBoost + neighborhoods | 60 features | 0.4328564 |
-| Physics-informed source + diffusion | 84 features | 0.5416623 |
+| Final XGBoost + neighborhoods | 76 features, two seeds | 0.4223478 |
+| Final physics-informed source + diffusion | 84 features, two seeds | 0.5183558 |
 | Persistence: retain the last measured depth | Last map | 0.7062322 |
 
-MAE is averaged over cells within each forecast window, then over windows, so large surveys do not dominate. XGBoost reduces error by about 39% relative to persistence; the physics model reduces it by about 23%. XGBoost is the deployment default: it had the lowest measured test MAE among the benchmark candidates and a small artifact. Its result is close to CatBoost (0.434970 ft), so the small difference is not evidence of a definitive statistical advantage. See `benchmark_results.csv` and `release_comparison.json`.
+MAE averages measured cells within each survey, then averages surveys equally. Final XGBoost improves the previous 0.4328564 ft backtest by 2.43% and persistence by 40.20%. Physics improves the previous 0.5416623 ft backtest by 4.30%. Twelve XGBoost configurations and five physics recipes were freshly trained. All new configuration and ensemble choices use 2023–2024 validation; the 2025–2026 backtest was inspected in prior project work. Full notes, ablations, plots, hotspot tradeoffs and data handling are in [RESULTS.md](RESULTS.md). `benchmark_results.csv` and `release_comparison.json` preserve the earlier model-family comparison.
 
-- `train_xgboost.py` trains our own XGBoost adapter. It uses four earlier surveys, cell location, depth differences and trend, survey gaps, season, past dredging flags, a training-derived baseline, and neighborhood summaries at 30, 90 and 210 m. Its 29 raw predictors become 58 value/missingness columns, plus curvature and horizon. It does not use weather or river drivers.
+- `train_xgboost.py` trains the selected recipe in `release_config.json`. Four historical maps supply location, depth differences, elapsed-day rates, finer day-of-year phase, local gradients, historical event flags, a training-derived baseline and 30/90/210 m neighborhood summaries. Its 37 raw predictors become 74 value/missingness columns, plus curvature and horizon. It fits all 2,161,268 measured training pairs with equal total weight per window. Targets are normalized to 28-day change and scaled to the requested lead at prediction. A two-seed ensemble uses robust pseudo-Huber loss with slope 0.5 m. Driver variants were tested and scored worse on validation.
 - `train_physics.py` independently trains our physics adapter. Its 42 raw predictors comprise 14 survey/history predictors plus 7- and 28-day summaries and coverage for tides, three rivers, rain, snowfall and temperature. Each has a missingness flag, giving 84 neural-network inputs. Drivers stop before the origin date; no future observed weather, flow or dredging flags enter either model.
 
 ## Data handling
 
 The reproducible training source is the pinned `timeseries_v2/timeseries.npz` at commit `c9e6f432b581aea2fd435618f72522ca7f784167`. `--dataset` accepts a local copy and checks its exact Git blob; omitting it downloads that copy. The supplied split is chronological: 2014–2022 training, 2023–2024 validation, and 2025–2026 test. Validation selects boosting checkpoints or neural checkpoints; test data do not fit preprocessing or weights. The driver archive includes retrospective weather reanalysis and date-only alignment, so these are hindcast results rather than validation of a live operational feed.
 
-The spatial core requires observations in at least 80% of training surveys. Core selection, historical-rate baseline, median imputers and scalers use training data only. Training samples up to 400 measured cells per window. Missing origin or target depths exclude a training/scoring pair; predictions require a measured origin. **Neither target maps nor origin maps are gap-filled.** Older predictors and driver gaps use training medians with explicit missingness flags. Driver summaries need at least 80% daily coverage; coverage is also an input. This preserves missing observations while allowing incomplete histories, but cannot establish accuracy in unsurveyed cells or untested winter conditions.
+The spatial core requires observations in at least 80% of the unique maps participating in training windows. Core selection, historical-rate baseline, median imputers and scalers use training data only. XGBoost fits all measured pairs; physics samples up to 400 per training window. Missing origin or target depths exclude a training/scoring pair; predictions require a measured origin. **Neither target maps nor origin maps are gap-filled.** Older predictors and driver gaps use training medians with explicit missingness flags. Driver summaries need at least 80% daily coverage; coverage is also an input. This preserves missing observations while allowing incomplete histories, but cannot establish accuracy in unsurveyed cells or untested winter conditions.
 
 The attachment contributes only its 5,500-cell geometry footprint, never prediction values or labels. Every published frame uses the intersection of that footprint and both models' valid predictions. Cells may therefore be omitted; both models show exactly the same cells for a given date pair. The latest frame exports 5,483 cells: 17 reference cells fail the training-only coverage criterion. The September 14 origin exports 5,432 because another 51 origin depths are missing.
 
@@ -34,7 +34,7 @@ The two-seed ensemble uses a reduced bed-evolution update:
 predicted_depth = observed_origin_depth + Δd
 ```
 
-Here `d` is positive-down depth in metres, `T` is days, `baseline28` is the training-derived 28-day change, `σ` is the training residual scale, and `fθ` is a small `84 → 32 → 32 → 1` tanh network. `Ld` sums four-neighbor depth differences divided by `(10 m)²`. Diffusion smooths local bed differences; `κ ≥ 0` is bounded for a stable transport-only update. The fitted members have `κ = 0.159298` and `0.160192 m²/day`.
+Here `d` is positive-down depth in metres, `T` is days, `baseline28` is the training-derived 28-day change, `σ` is the training residual scale, and `fθ` is a small `84 → 32 → 32 → 1` tanh network. `Ld` sums four-neighbor depth differences divided by `(10 m)²`. Diffusion smooths local bed differences; `κ ≥ 0` is bounded for a stable transport-only update. The fitted members have `κ = 0.142725` and `0.106191 m²/day`. Validation-selected Huber loss uses beta 0.25 in standardized residual units; checkpoints are epochs 12 and 30. `train_physics.py --recipe original` reproduces the earlier MSE fit.
 
 Neighbor exchange is equal and opposite. Missing/non-core edges have zero flux, so **only the diffusion term is conservative on the observed core**. This is a computational boundary assumption, not a measured harbor boundary condition. The learned source remains unconstrained and can absorb sediment deposition, erosion or dredging. This is feasible as a physics-informed surrogate; a calibrated sediment-transport PINN is not identifiable from these inputs alone. That would require sediment concentrations/properties, currents and boundary fluxes, plus independently validated dredging/placement terms.
 
@@ -51,6 +51,16 @@ python tools/anchorage/train_xgboost.py
 python tools/anchorage/train_physics.py
 python tools/anchorage/publish_overlays.py --frames 6
 python tools/anchorage/verify_overlays.py
+```
+
+To reproduce the full optimization and figures, run the searches before the analysis script. These regenerate the baseline and candidate artifacts that analysis requires.
+
+```bash
+python -m pip install -r tools/anchorage/requirements-analysis.txt
+python tools/anchorage/optimize_xgboost.py
+python tools/anchorage/optimize_physics.py
+python tools/anchorage/analyze_results.py
+python tools/anchorage/publish_overlays.py --frames 6
 ```
 
 Both trainers accept `--dataset /path/to/pinned-timeseries.npz` and `--output /path/to/artifact.joblib`. Defaults save to the Git-ignored `.cache/` directory. Publishing accepts `--artifacts /path/to/artifact-directory`. Pass `--reference /path/to/anchorage_prediction.geojson` to the verifier to check containment within the supplied geometry.

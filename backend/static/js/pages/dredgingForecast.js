@@ -6,8 +6,8 @@
   const feet = value => `${value.toFixed(2)} ft`;
   const date = value => new Intl.DateTimeFormat('en-US', { month:'short', day:'numeric', year:'numeric', timeZone:'UTC' }).format(new Date(`${value}T00:00:00Z`));
   const palettes = {
-    change: { min:-3, max:3, stops:['#b3263e','#e88372','#f5f0df','#80bfd0','#2465a0'] },
-    depth: { min:0, max:80, stops:['#f8d77b','#8ad1c2','#3296b2','#23558e','#17294c'] }
+    change: { min:-3, max:3, binWidth:0.5, stops:['#b3263e','#e88372','#f5f0df','#80bfd0','#2465a0'] },
+    depth: { min:0, max:80, binWidth:10, stops:['#f8d77b','#8ad1c2','#3296b2','#23558e','#17294c'] }
   };
   const state = { manifest:null, map:null, overlay:null, hotspots:null, collection:null, fitted:false, request:0, controller:null, cache:new Map() };
   function color(value) {
@@ -26,6 +26,64 @@
     el('legend-gradient').style.background = `linear-gradient(to right,${p.stops.join(',')})`;
     set('legend-min', `${p.min} ft or less`); set('legend-max', `${p.max} ft or more`);
     set('legend-description', mode === 'change' ? 'Predicted change · red: shallower · blue: deeper. Colors use a fixed scale across all dates and models.' : 'Predicted depth below low tide · yellow: shallow · dark blue: deep. Colors use a fixed scale across all dates and models.');
+  }
+  function clearDistribution(message = 'No forecast cells to summarize.') {
+    el('distribution-chart').replaceChildren(); el('distribution-chart').setAttribute('hidden','');
+    set('distribution-empty',message); el('distribution-empty').hidden = false;
+    for (const field of ['count','area','min','median','mean','max']) set(`distribution-${field}`,'—');
+  }
+  function distribution() {
+    const mode = el('forecast-layer').value, p = palettes[mode];
+    const label = mode === 'change' ? 'Change' : 'Depth';
+    set('distribution-title',`${label} distribution`);
+    if (!state.collection) { clearDistribution(); return; }
+    const values = state.collection.features.map(f => f.properties[`${mode}_ft`]).sort((a,b) => a-b);
+    const count = values.length, midpoint = Math.floor(count/2);
+    const median = count % 2 ? values[midpoint] : (values[midpoint-1]+values[midpoint])/2;
+    const mean = values.reduce((sum,value) => sum+value,0)/count;
+    const metricFeet = value => `${mode === 'change' && value > 0 ? '+' : ''}${feet(value)}`;
+    set('distribution-count',number(count));
+    set('distribution-area',`${(count*state.manifest.cell_metres**2/10000).toFixed(2)} ha`);
+    for (const [field,value] of [['min',values[0]],['median',median],['mean',mean],['max',values[count-1]]]) set(`distribution-${field}`,metricFeet(value));
+
+    const bins = Array.from({length:Math.round((p.max-p.min)/p.binWidth)},() => 0);
+    // Keep the horizontal scale comparable and count outliers in the end bins.
+    for (const value of values) bins[Math.max(0,Math.min(bins.length-1,Math.floor((value-p.min)/p.binWidth)))] += 1;
+    const binLabel = index => index === 0 ? `Less than ${p.min+p.binWidth} ft`
+      : index === bins.length-1 ? `${p.max-p.binWidth} ft or more`
+      : `${p.min+index*p.binWidth} to less than ${p.min+(index+1)*p.binWidth} ft`;
+    const svg = el('distribution-chart'); svg.replaceChildren();
+    const add = (tag, attributes, text) => {
+      const node = document.createElementNS('http://www.w3.org/2000/svg',tag);
+      for (const [name,value] of Object.entries(attributes)) node.setAttribute(name,String(value));
+      if (text !== undefined) node.textContent = text;
+      svg.append(node); return node;
+    };
+    add('title',{id:'distribution-chart-title'},`${label} distribution in feet across ${number(count)} cells on the map`);
+    add('desc',{id:'distribution-chart-description'},`Horizontal axis: ${label.toLowerCase()} in feet. Vertical axis: cell count. ${bins.map((n,i) => `${binLabel(i)}: ${number(n)} cells`).join('; ')}. ${mode === 'change' ? 'The dashed line marks zero change.' : ''}`);
+    const left = 43, right = 290, top = 24, bottom = 164;
+    const highest = Math.max(...bins), magnitude = 10**Math.floor(Math.log10(highest));
+    const ceiling = Math.ceil(highest/magnitude)*magnitude;
+    const x = value => left+(value-p.min)/(p.max-p.min)*(right-left);
+    const y = value => bottom-value/ceiling*(bottom-top);
+    add('text',{x:left,y:12,class:'distribution-axis-label'},'Cell count');
+    for (const tick of ceiling === 1 ? [0,1] : [0,Math.floor(ceiling/2),ceiling]) {
+      add('line',{x1:left,y1:y(tick),x2:right,y2:y(tick),class:'distribution-grid'});
+      add('text',{x:left-6,y:y(tick)+4,'text-anchor':'end',class:'distribution-tick'},number(tick));
+    }
+    bins.forEach((n,index) => {
+      const start = p.min+index*p.binWidth;
+      const bar = add('rect',{x:x(start)+1,y:y(n),width:(right-left)/bins.length-2,height:bottom-y(n),fill:color(start+p.binWidth/2),class:'distribution-bar'});
+      const title = document.createElementNS('http://www.w3.org/2000/svg','title');
+      title.textContent = `${binLabel(index)}: ${number(n)} cells`; bar.append(title);
+    });
+    if (mode === 'change') add('line',{x1:x(0),y1:top,x2:x(0),y2:bottom,class:'distribution-zero'});
+    for (let i = 0; i <= 4; i += 1) {
+      const tick = p.min+(p.max-p.min)*i/4;
+      add('text',{x:x(tick),y:bottom+17,'text-anchor':'middle',class:'distribution-tick'},String(tick));
+    }
+    add('text',{x:(left+right)/2,y:201,'text-anchor':'middle',class:'distribution-axis-label'},`${label} (ft)`);
+    el('distribution-empty').hidden = true; svg.removeAttribute('hidden');
   }
   function popup(feature) {
     const div = document.createElement('div'); div.className = 'forecast-popup';
@@ -73,7 +131,7 @@
     set('model-name',model.label); set('model-score',Number.isFinite(model.mae_ft) ? model.mae_ft.toFixed(3) : 'Unavailable');
     set('forecast-status',`Historical forecast preview · ${model.label} · ${number(count)} cells`);
     const download = el('download-geojson'); download.href = url; download.download = `anchorage-${model.id}-${frame.from_survey}.geojson`; download.setAttribute('aria-disabled','false');
-    legend(); hotspots();
+    legend(); hotspots(); distribution();
   }
   async function load() {
     const frame = state.manifest.frames[Number(el('forecast-frame').value)];
@@ -82,6 +140,7 @@
     state.controller?.abort(); state.controller = new AbortController();
     el('forecast-error').hidden = true; el('forecast-content').setAttribute('aria-busy','true');
     el('download-geojson').removeAttribute('href'); el('download-geojson').setAttribute('aria-disabled','true');
+    clearDistribution('Loading the selected forecast…');
     set('frame-origin',date(frame.from_survey)); set('frame-target',`Predicting ${date(frame.predicted_for)} · 28-day forecast`);
     set('forecast-status',`Loading ${model.label}…`);
     try {
@@ -97,6 +156,7 @@
     } catch (error) {
       if (error.name === 'AbortError' || request !== state.request) return;
       state.overlay?.remove(); state.overlay = null; state.collection = null; state.hotspots.clearLayers();
+      clearDistribution();
       for (const id of ['cell-count','mean-depth','mean-change','hotspot-area','model-name','model-score']) set(id,'—');
       set('forecast-status','Forecast unavailable'); set('forecast-error',`${error.message} Please choose another date or reload the page.`); el('forecast-error').hidden = false;
     } finally { if (request === state.request) el('forecast-content').setAttribute('aria-busy','false'); }
@@ -115,7 +175,7 @@
       .on('tileerror',() => { el('basemap-status').hidden = false; }).addTo(state.map);
     L.control.scale({imperial:false}).addTo(state.map); state.hotspots = L.layerGroup().addTo(state.map);
     el('forecast-model').addEventListener('change',load); el('forecast-frame').addEventListener('input',load);
-    el('forecast-layer').addEventListener('change',() => { state.overlay?.setStyle(style); legend(); });
+    el('forecast-layer').addEventListener('change',() => { state.overlay?.setStyle(style); legend(); distribution(); });
     el('show-hotspots').addEventListener('change',hotspots);
     await load();
   }

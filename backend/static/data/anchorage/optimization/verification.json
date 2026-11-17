@@ -1,0 +1,24 @@
+{
+  "dataset_git_blob": "7b603395ef4992b201bc3dc00ef8c3ca1a22c521",
+  "trained_candidates": {
+    "xgboost": 12,
+    "physics": 5
+  },
+  "independent_script_reproduction_max_abs_error_m": {
+    "xgboost": 0.0,
+    "physics": 0.0
+  },
+  "future_maps_and_event_flags_perturbation": "predictions unchanged for both selected models",
+  "origin_missingness": "output finite mask equals observed origin mask in both model cores",
+  "geojson": {
+    "models": 2,
+    "frames": 6,
+    "files": 12,
+    "feature_records": 65694,
+    "same_footprints_per_frame": true,
+    "reference_geometry_subset": true
+  },
+  "visualization": "24 model/date/layer combinations passed count, median, feet axes and zero-reference checks; injected503 cleared statistics; root browser confirmed score/date/download and histogram changes",
+  "selection": "New choices use validation;2025-2026 backtest had prior exposure",
+  "source": "commands and numerical outputs documented in RESULTS.md"
+}

@@ -29,6 +29,14 @@ TRAIN_CELLS_PER_WINDOW = 400
 SEEDS = (42, 43)
 EPOCHS = 36
 BATCH_SIZE = 8192
+ORIGINAL_CONFIG = {
+    "loss": "mse", "huber_beta": 0.5, "learning_rate": 0.001,
+    "weight_decay": 0.0001, "seeds": list(SEEDS), "epochs": EPOCHS,
+    "batch_size": BATCH_SIZE,
+}
+# Five fixed recipes, selected on validation only: Huber beta .25, 0.642645 ft.
+# The original MSE recipe remains available for an exact validation comparison.
+DEFAULT_CONFIG = {**ORIGINAL_CONFIG, "loss": "huber", "huber_beta": 0.25}
 DRIVERS = ("tide_range", "knik_flow", "matanuska_flow", "shipcreek_flow", "rain", "snowfall", "temp")
 FACTORS = {
     "tide_range": FEET_TO_METRES,
@@ -232,7 +240,7 @@ def _predict_rows(model, features, curvature, lead, baseline):
     return np.mean(output, axis=0)
 
 
-def train_model(archive, raw_dataset_path, windows, split):
+def train_model(archive, raw_dataset_path, windows, split, config=None, evaluate_test=True):
     """Fit our own two-seed source/diffusion ensemble from the pinned v2 data.
 
     Validation selects each seed's checkpoint; test is read only after both fits.
@@ -243,6 +251,18 @@ def train_model(archive, raw_dataset_path, windows, split):
     import torch
     from torch import nn
 
+    settings = copy.deepcopy(DEFAULT_CONFIG)
+    if config is not None:
+        unknown = set(config) - set(settings)
+        if unknown:
+            raise ValueError(f"Unknown physics training options: {sorted(unknown)}")
+        settings.update(config)
+    if settings["loss"] not in ("mse", "mae", "huber"):
+        raise ValueError("Physics loss must be mse, mae, or huber.")
+    if (settings["epochs"] < 1 or settings["batch_size"] < 1 or not settings["seeds"]
+            or settings["learning_rate"] <= 0 or settings["weight_decay"] < 0
+            or settings["huber_beta"] <= 0):
+        raise ValueError("Physics training options must have valid positive bounds.")
     windows = np.asarray(windows, dtype=int)
     split = np.asarray(split)
     if windows.ndim != 2 or windows.shape[1] != 5 or split.shape != (len(windows),):
@@ -264,7 +284,7 @@ def train_model(archive, raw_dataset_path, windows, split):
     training = windows[split == "train"]
     core, baseline = _calibration(archive, training)
     model = {
-        "version": 1, "sklearn": sklearn.__version__, "source_commit": SOURCE_COMMIT,
+        "version": 1, "sklearn": sklearn.__version__, "torch": str(torch.__version__), "source_commit": SOURCE_COMMIT,
         "architecture": "physics-diffusion", "profile_id": "physics-diffusion",
         "model_name": "Physics-informed source + diffusion", "spatial": False,
         "core": core, "grid": dict(archive.grid), "baseline": baseline,
@@ -282,11 +302,11 @@ def train_model(archive, raw_dataset_path, windows, split):
             "limitation": "Reduced source/diffusion surrogate; no identified sediment flux, boundary currents, or dredging forcing. The learned source is unconstrained.",
         },
         "training_parameters": {
-            "seeds": list(SEEDS), "epochs": EPOCHS, "batch_size": BATCH_SIZE,
+            **copy.deepcopy(settings),
             "sample_cells_per_window": TRAIN_CELLS_PER_WINDOW, "sampling_seed": 42,
-            "optimizer": "Adam", "learning_rate": 0.001, "weight_decay": 0.0001,
+            "optimizer": "Adam", "loss_units": "training residual standard deviations",
             "gradient_clip_norm": 5, "source_network": [84, 32, 32, 1],
-            "activation": "tanh", "selection": "Mean per-window validation MAE; checkpoints 0,1,3,...,36",
+            "activation": "tanh", "selection": f"Mean per-window validation MAE; checkpoints 0,1,multiples of 3,final {settings['epochs']}",
         },
     }
     train = _window_rows(model, archive, drivers, training, sample=True)
@@ -334,21 +354,27 @@ def train_model(archive, raw_dataset_path, windows, split):
                 values.append(prediction.numpy())
         return np.concatenate(values)
 
-    for seed in SEEDS:
+    for seed in settings["seeds"]:
         torch.manual_seed(seed)
         rng = np.random.default_rng(seed)
         network = SourceDiffusion()
-        optimizer = torch.optim.Adam(network.parameters(), lr=0.001, weight_decay=0.0001)
+        optimizer = torch.optim.Adam(network.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"])
         best = _score(validation, validation_predictions(network))["mae_ft"]
         best_state, best_epoch = copy.deepcopy(network.state_dict()), 0
-        for epoch in range(1, EPOCHS + 1):
+        for epoch in range(1, settings["epochs"] + 1):
             network.train()
             order = rng.permutation(len(tx))
             losses = []
-            for begin in range(0, len(order), BATCH_SIZE):
-                indices = order[begin:begin + BATCH_SIZE]
+            for begin in range(0, len(order), settings["batch_size"]):
+                indices = order[begin:begin + settings["batch_size"]]
                 prediction = network(tx[indices], tlead[indices], tlap[indices], tbase[indices])
-                loss = ((prediction - ty[indices]) / target_scale).square().mean()
+                residual = (prediction - ty[indices]) / target_scale
+                if settings["loss"] == "mse":
+                    loss = residual.square().mean()
+                elif settings["loss"] == "mae":
+                    loss = residual.abs().mean()
+                else:
+                    loss = nn.functional.smooth_l1_loss(residual, torch.zeros_like(residual), beta=settings["huber_beta"])
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(network.parameters(), 5)
@@ -356,7 +382,7 @@ def train_model(archive, raw_dataset_path, windows, split):
                 with torch.no_grad():
                     network.kappa.clamp_(0, KAPPA_MAX)
                 losses.append(loss.item())
-            if epoch == 1 or epoch % 3 == 0:
+            if epoch == 1 or epoch % 3 == 0 or epoch == settings["epochs"]:
                 score = _score(validation, validation_predictions(network))["mae_ft"]
                 model["training_history"].append({
                     "seed": seed, "epoch": epoch, "training_loss": float(np.mean(losses)),
@@ -373,12 +399,18 @@ def train_model(archive, raw_dataset_path, windows, split):
         print(f"Physics seed {seed}: selected epoch {best_epoch}, validation MAE {best:.6f} ft, kappa {float(network.kappa.detach()):.6f} m2/day", flush=True)
 
     val_prediction = _predict_rows(model, val_x, validation["curvature"], validation["lead"], validation["baseline"])
-    test = _window_rows(model, archive, drivers, windows[split == "test"])
-    test_x = design_matrix(model, test.pop("raw"))
-    test_prediction = _predict_rows(model, test_x, test["curvature"], test["lead"], test["baseline"])
-    model["evaluation"] = {"validation": _score(validation, val_prediction), "test": _score(test, test_prediction)}
+    model["evaluation"] = {"validation": _score(validation, val_prediction)}
+    if evaluate_test:
+        model["evaluation"]["test"] = evaluate_model(model, archive, raw_dataset_path, windows[split == "test"])
     model["fit_seconds"] = time.perf_counter() - start
     return model
+
+
+def evaluate_model(model, archive, raw_dataset_path, windows):
+    """Score specified windows without fitting; tuning calls supply validation only."""
+    rows = _window_rows(model, archive, read_drivers(raw_dataset_path, archive.dates), windows)
+    features = design_matrix(model, rows.pop("raw"))
+    return _score(rows, _predict_rows(model, features, rows["curvature"], rows["lead"], rows["baseline"]))
 
 
 def predict_change(model, archive, raw_dataset_path, history, lead=REFERENCE_DAYS):

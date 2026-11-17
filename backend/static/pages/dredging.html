@@ -38,6 +38,20 @@
 <label class="forecast-checkbox"><input id="show-hotspots" type="checkbox" /> Mark predicted shoaling hotspots</label>
 <p class="forecast-help">Markers group nearby cells predicted to lose at least 1 ft. Select a cell for its depth and change.</p>
 <a id="download-geojson" class="forecast-download" aria-disabled="true">Download this GeoJSON</a></section>
+<section class="forecast-panel forecast-distribution" aria-labelledby="distribution-title">
+<h2 id="distribution-title">Change distribution</h2>
+<p id="distribution-empty" class="forecast-help">Waiting for the selected forecast.</p>
+<svg id="distribution-chart" viewBox="0 0 300 204" role="img" aria-labelledby="distribution-chart-title distribution-chart-description" hidden></svg>
+<table class="forecast-distribution-stats" aria-label="Selected map footprint statistics"><tbody>
+<tr><th scope="row">Cells on map</th><td id="distribution-count">—</td></tr>
+<tr><th scope="row">Map footprint</th><td id="distribution-area">—</td></tr>
+<tr><th scope="row">Minimum</th><td id="distribution-min">—</td></tr>
+<tr><th scope="row">Median</th><td id="distribution-median">—</td></tr>
+<tr><th scope="row">Mean</th><td id="distribution-mean">—</td></tr>
+<tr><th scope="row">Maximum</th><td id="distribution-max">—</td></tr>
+</tbody></table>
+<p class="forecast-help">All cells in the displayed map footprint. Bins stay fixed across dates and models; end bars include values beyond the color scale.</p>
+</section>
 <section class="forecast-panel"><h2>Model performance</h2><p id="model-name">—</p><p class="forecast-score"><strong id="model-score">—</strong> ft MAE</p><p class="forecast-help">Mean absolute error on held-out survey dates. Lower is better; this is an evaluation score, not a confidence interval.</p></section>
 <section class="forecast-panel"><h2>Reading this preview</h2><p>Depth is positive below low tide. A negative change means shallowing; a positive change means deepening.</p><p>Only eligible cells with a measured starting depth are shown. Empty areas are outside this prediction footprint, not zero depth.</p><p>These are historical forecasts, not a live survey or navigation chart. Predicting a dredging date needs required channel depths and intervention records.</p></section>
 </aside>

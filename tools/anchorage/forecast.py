@@ -40,6 +40,10 @@ NEIGHBOR_FEATURE_NAMES = tuple(
     for width in (30, 90, 210)
     for name in ("depth_anomaly", "roughness", "recent_rate", "longer_rate", "recent_coverage")
 )
+DETAIL_FEATURE_NAMES = (
+    "day_sin", "day_cos", "interval0_rate_m_28d", "interval1_rate_m_28d",
+    "interval2_rate_m_28d", "recent_minus_long_rate_m_28d", "north_gradient", "east_gradient",
+)
 
 
 @dataclass
@@ -49,6 +53,7 @@ class Archive:
     dredged: np.ndarray
     grid: dict
     step: int
+    drivers: dict = None
 
 
 def read_archive(path):
@@ -70,7 +75,13 @@ def read_archive(path):
         }
     if grid["cell_metres"] != 10:
         raise ValueError("The benchmark uses a 10 m grid.")
-    return Archive(maps, dates, dredged, grid, step)
+    from physics import DRIVERS, read_drivers
+
+    with np.load(path, allow_pickle=False) as source:
+        required = {"tide_days", "days", *(f"{name}_daily" for name in DRIVERS)}
+        has_drivers = required.issubset(source.files)
+    drivers = read_drivers(path, dates) if has_drivers else None
+    return Archive(maps, dates, dredged, grid, step, drivers)
 
 
 def source_hash(path):
@@ -130,7 +141,52 @@ def neighborhood_features(archive, core, history, gaps):
     return np.column_stack(columns).astype(np.float32)
 
 
-def raw_features(archive, core, baseline, history, spatial=False):
+def detail_features(archive, core, history, gaps):
+    maps = archive.maps[history]
+    last = np.where(core, maps[-1], np.nan)
+    origin = archive.dates[history[-1]]
+    year_start = origin.astype("datetime64[Y]").astype("datetime64[D]")
+    phase = 2 * np.pi * int((origin - year_start).astype(int)) / 365.25
+    rates = np.diff(maps, axis=0) * LEAD_DAYS / gaps[:, None, None]
+    long_rate = (last - maps[0]) * LEAD_DAYS / gaps.sum()
+    gradients = []
+    for axis in (0, 1):
+        before = np.full_like(last, np.nan)
+        after = np.full_like(last, np.nan)
+        low, high = (np.s_[:-1, :], np.s_[1:, :]) if axis == 0 else (np.s_[:, :-1], np.s_[:, 1:])
+        before[high] = (last[high] - last[low]) / archive.grid["cell_metres"]
+        after[low] = (last[high] - last[low]) / archive.grid["cell_metres"]
+        count = np.isfinite(before).astype(int) + np.isfinite(after)
+        gradient = np.divide(np.nan_to_num(before) + np.nan_to_num(after), count,
+                             out=np.full_like(last, np.nan), where=count > 0)
+        gradients.append(gradient[core])
+    return np.column_stack([
+        np.full(int(core.sum()), np.sin(phase)), np.full(int(core.sum()), np.cos(phase)),
+        *(rate[core] for rate in rates), (rates[-1] - long_rate)[core], *gradients,
+    ]).astype(np.float32)
+
+
+def environment_features(archive, origin):
+    from physics import DRIVERS, driver_features
+
+    if archive.drivers is None:
+        raise ValueError("The driver-enabled model requires the v2 daily driver arrays.")
+    values = driver_features(archive.drivers, origin).reshape(len(DRIVERS), 4)
+    return values[[name != "snowfall" for name in DRIVERS]].ravel().astype(np.float32)
+
+
+def feature_names(spatial, feature_set):
+    names = MAP_FEATURE_NAMES + (NEIGHBOR_FEATURE_NAMES if spatial else ())
+    if feature_set in ("details", "drivers"):
+        names += DETAIL_FEATURE_NAMES
+    if feature_set == "drivers":
+        from physics import FEATURE_NAMES
+
+        names += tuple(name for name in FEATURE_NAMES[14:] if not name.startswith("snowfall_"))
+    return list(names) + [f"{name}_missing" for name in names] + ["laplacian_m_per_m2", "lead_over_28d"]
+
+
+def raw_features(archive, core, baseline, history, spatial=False, feature_set="base"):
     rows, cols = np.where(core)
     maps = archive.maps[history][:, core]
     gaps = np.diff(archive.dates[history]).astype(int)
@@ -151,6 +207,11 @@ def raw_features(archive, core, baseline, history, spatial=False):
     curvature = laplacian(depth, core & np.isfinite(depth), archive.grid["cell_metres"])[core]
     if spatial:
         raw = np.column_stack([raw, neighborhood_features(archive, core, history, gaps)])
+    if feature_set in ("details", "drivers"):
+        raw = np.column_stack([raw, detail_features(archive, core, history, gaps)])
+    if feature_set == "drivers":
+        values = environment_features(archive, archive.dates[current])
+        raw = np.column_stack([raw, np.broadcast_to(values, (len(raw), len(values)))])
     return raw, curvature, np.isfinite(last)
 
 
@@ -166,7 +227,8 @@ def observed_changes(archive, core, window):
     return (archive.maps[target] - archive.maps[origin])[core]
 
 
-def training_data(archive, windows, split, spatial=False):
+def training_data(archive, windows, split, spatial=False, config=None):
+    config = config or {}
     training = windows[split == "train"]
     core = np.isfinite(archive.maps[np.unique(training)]).mean(axis=0) >= 0.8
     lead = (archive.dates[training[:, -1]] - archive.dates[training[:, -2]]).astype(int)
@@ -186,11 +248,11 @@ def training_data(archive, windows, split, spatial=False):
     for window, days in zip(training, lead):
         change = observed_changes(archive, core, window)
         valid = np.flatnonzero(np.isfinite(change))
-        size = min(TRAIN_CELLS_PER_WINDOW, len(valid))
+        size = min(config.get("cells_per_window", TRAIN_CELLS_PER_WINDOW), len(valid))
         if size == 0:
             continue
         chosen = np.sort(rng.choice(valid, size, replace=False))
-        raw, curvature, _ = raw_features(archive, core, baseline, window[:-1], spatial)
+        raw, curvature, _ = raw_features(archive, core, baseline, window[:-1], spatial, config.get("feature_set", "base"))
         raw_rows.append(raw[chosen])
         curvatures.append(curvature[chosen])
         changes.append(change[chosen])
@@ -206,6 +268,7 @@ def training_data(archive, windows, split, spatial=False):
         "version": SCHEMA_VERSION, "sklearn": sklearn.__version__, "source_commit": SOURCE_COMMIT,
         "core": core, "grid": archive.grid, "baseline": baseline,
         "imputer": imputer, "scaler": scaler, "spatial": spatial,
+        "config": dict(config), "feature_set": config.get("feature_set", "base"),
         "training_rows": len(raw), "train_end": str(archive.dates[training[:, -1]].max()),
         "max_history_gap": int(np.diff(archive.dates[training[:, :-1]], axis=1).astype(int).max()),
         "target_months": sorted(set(archive.dates[windows[split != "train", -1]].astype("datetime64[M]").astype(int) % 12 + 1)),
@@ -214,21 +277,41 @@ def training_data(archive, windows, split, spatial=False):
             np.concatenate(changes), sample_weights)
 
 
-def fit_model(archive, windows, split):
+def fit_model(archive, windows, split, config=None):
+    config = config or {}
     profile = PROFILES[RELEASE_PROFILE]
-    model, features, changes, weights = training_data(archive, windows, split, profile.spatial)
+    model, features, changes, weights = training_data(archive, windows, split, profile.spatial, config)
     validation_features, validation_changes, counts = evaluation_inputs(model, archive, windows[split == "val"])
     validation_weights = np.repeat(1 / counts, counts)
     validation_weights /= validation_weights.mean()
     with threadpool_limits(limits=4):
-        model["estimator"] = fit_estimator(
-            RELEASE_PROFILE, features, changes, weights,
-            (validation_features, validation_changes, validation_weights),
-        )
+        if config:
+            from xgboost import XGBRegressor
+
+            parameters = dict(
+                objective="reg:pseudohubererror", huber_slope=0.25, eval_metric="mae",
+                tree_method="hist", n_estimators=900, learning_rate=0.045, max_depth=7,
+                min_child_weight=35, subsample=0.85, colsample_bytree=0.9, reg_lambda=8,
+                early_stopping_rounds=45, n_jobs=4, random_state=42,
+            )
+            parameters.update(config.get("parameters", {}))
+            if parameters["objective"] != "reg:pseudohubererror":
+                parameters.pop("huber_slope", None)
+            train_leads = features[:, -1]
+            targets = changes / train_leads if config.get("rate_target", False) else changes
+            validation_targets = validation_changes / validation_features[:, -1] if config.get("rate_target", False) else validation_changes
+            model["estimator"] = XGBRegressor(**parameters).fit(
+                features, targets, sample_weight=weights, eval_set=[(validation_features, validation_targets)],
+                sample_weight_eval_set=[validation_weights], verbose=False,
+            )
+        else:
+            model["estimator"] = fit_estimator(
+                RELEASE_PROFILE, features, changes, weights,
+                (validation_features, validation_changes, validation_weights),
+            )
     model["model_name"] = profile.family
     model["profile_id"] = RELEASE_PROFILE
-    names = MAP_FEATURE_NAMES + (NEIGHBOR_FEATURE_NAMES if profile.spatial else ())
-    model["input_features"] = list(names) + [f"{name}_missing" for name in names] + ["laplacian_m_per_m2", "lead_over_28d"]
+    model["input_features"] = feature_names(profile.spatial, model["feature_set"])
     model["training_windows"] = int((split == "train").sum())
     return model
 
@@ -236,10 +319,15 @@ def fit_model(archive, windows, split):
 def predict_change(model, archive, history, lead=LEAD_DAYS):
     raw, curvature, valid = raw_features(
         archive, model["core"], model["baseline"], history, model.get("spatial", False),
+        model.get("feature_set", "base"),
     )
     prediction = np.full(len(valid), np.nan)
     if valid.any():
-        prediction[valid] = predict(model["estimator"], design_matrix(model, raw[valid], curvature[valid], lead))
+        matrix = design_matrix(model, raw[valid], curvature[valid], lead)
+        estimators = model.get("estimators", [model["estimator"]])
+        prediction[valid] = np.mean([predict(estimator, matrix) for estimator in estimators], axis=0)
+        if model.get("config", {}).get("rate_target", False):
+            prediction[valid] *= lead / LEAD_DAYS
     return prediction
 
 
@@ -248,7 +336,7 @@ def evaluation_inputs(model, archive, windows):
     for window in windows:
         lead = int((archive.dates[window[-1]] - archive.dates[window[-2]]).astype(int))
         truth = observed_changes(archive, model["core"], window)
-        raw, curvature, _ = raw_features(archive, model["core"], model["baseline"], window[:-1], model["spatial"])
+        raw, curvature, _ = raw_features(archive, model["core"], model["baseline"], window[:-1], model["spatial"], model.get("feature_set", "base"))
         observed = np.isfinite(truth)
         matrices.append(design_matrix(model, raw[observed], curvature[observed], lead))
         targets.append(truth[observed])

@@ -120,12 +120,17 @@ def main():
         }
         if adapter.id == "physics":
             details["physics"] = model["physics"]
+            details["training_parameters"] = model["training_parameters"]
             details["members"] = [{key: member[key] for key in ("seed", "best_epoch", "kappa_m2_day")}
                                   for member in model["members"]]
         else:
+            estimators = model.get("estimators", [model["estimator"]])
+            details["config"] = model.get("config", {})
+            details["selection"] = model.get("selection", {})
             details["boosting_rounds"] = int(model["estimator"].best_iteration + 1)
+            details["member_boosting_rounds"] = [int(estimator.best_iteration + 1) for estimator in estimators]
             details["feature_importance_gain"] = dict(zip(model["input_features"],
-                model["estimator"].feature_importances_.astype(float).tolist()))
+                np.mean([estimator.feature_importances_ for estimator in estimators], axis=0).astype(float).tolist()))
         report["models"][adapter.id] = details
     for primary_history, target, kind in frames:
         history_dates = primary.dates[primary_history]

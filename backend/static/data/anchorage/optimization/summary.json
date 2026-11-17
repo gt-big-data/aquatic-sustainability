@@ -1,0 +1,609 @@
+{
+  "dataset_git_blob": "7b603395ef4992b201bc3dc00ef8c3ca1a22c521",
+  "reviewed_upstream_commit": "016f0469a7a34756b6dc6d35b757511a7a630fd0",
+  "metric": "Primary MAE averages measured cells within each survey, then averages surveys equally.",
+  "selection": "All new choices use 2023-2024 validation. The 2025-2026 backtest was inspected in prior work and is reused for final comparison.",
+  "split_counts": {
+    "train": 367,
+    "val": 77,
+    "test": 71
+  },
+  "test": {
+    "incumbent": {
+      "mae_ft": 0.43285639471277637,
+      "pooled_mae_ft": 0.4340472064817529,
+      "rmse_ft": 0.7067811174387943,
+      "bias_ft": 0.014207411645143718,
+      "windows": 71,
+      "scored_cells": 405181,
+      "year_mae_ft": {
+        "2025": 0.47073841984724557,
+        "2026": 0.39163183794879525
+      },
+      "hotspots": {
+        "threshold_change_ft": -1,
+        "actual_cells": 81067,
+        "predicted_cells": 60688,
+        "true_positive_cells": 46968,
+        "precision": 0.773925652517796,
+        "recall": 0.5793726177112759
+      }
+    },
+    "xgboost": {
+      "mae_ft": 0.42234784861947927,
+      "pooled_mae_ft": 0.4233587682835046,
+      "rmse_ft": 0.6862804311694576,
+      "bias_ft": -0.00951630807534946,
+      "windows": 71,
+      "scored_cells": 405181,
+      "year_mae_ft": {
+        "2025": 0.4539114983237115,
+        "2026": 0.38799917100016745
+      },
+      "hotspots": {
+        "threshold_change_ft": -1,
+        "actual_cells": 81067,
+        "predicted_cells": 68968,
+        "true_positive_cells": 51618,
+        "precision": 0.7484340563739705,
+        "recall": 0.636732579224592
+      }
+    },
+    "physics_original": {
+      "mae_ft": 0.5416622973235593,
+      "pooled_mae_ft": 0.5425990169263609,
+      "rmse_ft": 0.821062492790785,
+      "bias_ft": -0.04728623944183466,
+      "windows": 71,
+      "scored_cells": 405181,
+      "year_mae_ft": {
+        "2025": 0.5725826156608937,
+        "2026": 0.5080137156035192
+      },
+      "hotspots": {
+        "threshold_change_ft": -1,
+        "actual_cells": 81067,
+        "predicted_cells": 71781,
+        "true_positive_cells": 42232,
+        "precision": 0.5883451052506931,
+        "recall": 0.5209518052968533
+      }
+    },
+    "physics": {
+      "mae_ft": 0.5183558315245821,
+      "pooled_mae_ft": 0.5191321972116847,
+      "rmse_ft": 0.8035918244577502,
+      "bias_ft": -0.10959232255998082,
+      "windows": 71,
+      "scored_cells": 405181,
+      "year_mae_ft": {
+        "2025": 0.5442234082657819,
+        "2026": 0.4902058215415117
+      },
+      "hotspots": {
+        "threshold_change_ft": -1,
+        "actual_cells": 81067,
+        "predicted_cells": 74510,
+        "true_positive_cells": 46313,
+        "precision": 0.6215675748221715,
+        "recall": 0.5712928811970346
+      }
+    },
+    "persistence": {
+      "mae_ft": 0.7062321848377816,
+      "pooled_mae_ft": 0.7084851183397926,
+      "rmse_ft": 1.0874954640699623,
+      "bias_ft": 0.3736222973524343,
+      "windows": 71,
+      "scored_cells": 405181,
+      "year_mae_ft": {
+        "2025": 0.775122785537552,
+        "2026": 0.6312630017233261
+      },
+      "hotspots": {
+        "threshold_change_ft": -1,
+        "actual_cells": 81067,
+        "predicted_cells": 0,
+        "true_positive_cells": 0,
+        "precision": null,
+        "recall": 0.0
+      }
+    }
+  },
+  "paired_comparison": {
+    "final_minus_original_xgb_mae_ft": -0.010508546093297298,
+    "calendar_month_block_bootstrap_95_ft": [
+      -0.02544544712186867,
+      -0.0010395522371972376
+    ],
+    "month_blocks": 10,
+    "scope": "Descriptive interval on the previously inspected 2025-2026 backtest."
+  },
+  "xgboost": {
+    "selection_metric": "Mean per-window validation MAE in feet",
+    "test_status": "2025-2026 was inspected previously; no test labels used in this search or selection.",
+    "winner": "details_huber05",
+    "ensemble_validation": {
+      "mae_ft": 0.5499152962757313,
+      "persistence_mae_ft": 0.7873863512584689,
+      "windows": 77,
+      "scored_cells": 453076
+    },
+    "use_ensemble": true,
+    "recipe": {
+      "config": {
+        "cells_per_window": 10000,
+        "feature_set": "details",
+        "rate_target": true,
+        "parameters": {
+          "huber_slope": 0.5
+        }
+      },
+      "seeds": [
+        42,
+        43
+      ]
+    },
+    "candidates": [
+      {
+        "id": "incumbent",
+        "config": {},
+        "validation": {
+          "mae_ft": 0.5664755989866692,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 146800,
+        "features": 60,
+        "boosting_rounds": 77,
+        "fit_validation_seconds": 4.570869457907975
+      },
+      {
+        "id": "sample1200",
+        "config": {
+          "cells_per_window": 1200
+        },
+        "validation": {
+          "mae_ft": 0.5636655973508968,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 440004,
+        "features": 60,
+        "boosting_rounds": 91,
+        "fit_validation_seconds": 6.287757124984637
+      },
+      {
+        "id": "all_cells",
+        "config": {
+          "cells_per_window": 10000
+        },
+        "validation": {
+          "mae_ft": 0.5708403732856837,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 60,
+        "boosting_rounds": 89,
+        "fit_validation_seconds": 19.46458708308637
+      },
+      {
+        "id": "details1200",
+        "config": {
+          "cells_per_window": 1200,
+          "feature_set": "details"
+        },
+        "validation": {
+          "mae_ft": 0.5566781789907683,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 440004,
+        "features": 76,
+        "boosting_rounds": 145,
+        "fit_validation_seconds": 8.955024792114273
+      },
+      {
+        "id": "drivers1200",
+        "config": {
+          "cells_per_window": 1200,
+          "feature_set": "drivers"
+        },
+        "validation": {
+          "mae_ft": 0.5645247616923358,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 440004,
+        "features": 124,
+        "boosting_rounds": 165,
+        "fit_validation_seconds": 12.737211124971509
+      },
+      {
+        "id": "details_rate1200",
+        "config": {
+          "cells_per_window": 1200,
+          "feature_set": "details",
+          "rate_target": true
+        },
+        "validation": {
+          "mae_ft": 0.5582519494672464,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 440004,
+        "features": 76,
+        "boosting_rounds": 167,
+        "fit_validation_seconds": 8.92246966692619
+      },
+      {
+        "id": "details_rate_all",
+        "config": {
+          "cells_per_window": 10000,
+          "feature_set": "details",
+          "rate_target": true
+        },
+        "validation": {
+          "mae_ft": 0.556744680071604,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 76,
+        "boosting_rounds": 151,
+        "fit_validation_seconds": 27.200994750019163
+      },
+      {
+        "id": "drivers_rate_all",
+        "config": {
+          "cells_per_window": 10000,
+          "feature_set": "drivers",
+          "rate_target": true
+        },
+        "validation": {
+          "mae_ft": 0.5729929856046702,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 124,
+        "boosting_rounds": 141,
+        "fit_validation_seconds": 38.408279791940004
+      },
+      {
+        "id": "details_shallow",
+        "config": {
+          "cells_per_window": 10000,
+          "feature_set": "details",
+          "rate_target": true,
+          "parameters": {
+            "max_depth": 5
+          }
+        },
+        "validation": {
+          "mae_ft": 0.561650440813183,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 76,
+        "boosting_rounds": 195,
+        "fit_validation_seconds": 26.46056754118763
+      },
+      {
+        "id": "details_deep",
+        "config": {
+          "cells_per_window": 10000,
+          "feature_set": "details",
+          "rate_target": true,
+          "parameters": {
+            "max_depth": 9
+          }
+        },
+        "validation": {
+          "mae_ft": 0.5572306261013028,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 76,
+        "boosting_rounds": 72,
+        "fit_validation_seconds": 24.838224542094395
+      },
+      {
+        "id": "details_mae",
+        "config": {
+          "cells_per_window": 10000,
+          "feature_set": "details",
+          "rate_target": true,
+          "parameters": {
+            "objective": "reg:absoluteerror"
+          }
+        },
+        "validation": {
+          "mae_ft": 0.5607653230886126,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 76,
+        "boosting_rounds": 193,
+        "fit_validation_seconds": 123.55860191700049
+      },
+      {
+        "id": "details_huber05",
+        "config": {
+          "cells_per_window": 10000,
+          "feature_set": "details",
+          "rate_target": true,
+          "parameters": {
+            "huber_slope": 0.5
+          }
+        },
+        "validation": {
+          "mae_ft": 0.5500434772042744,
+          "persistence_mae_ft": 0.7873863512584689,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "training_rows": 2161268,
+        "features": 76,
+        "boosting_rounds": 134,
+        "fit_validation_seconds": 26.432591333054006
+      }
+    ],
+    "final_evaluation": {
+      "validation": {
+        "mae_ft": 0.5499152962757313,
+        "persistence_mae_ft": 0.7873863512584689,
+        "windows": 77,
+        "scored_cells": 453076
+      },
+      "test": {
+        "mae_ft": 0.42234784861947916,
+        "persistence_mae_ft": 0.7062321848377817,
+        "windows": 71,
+        "scored_cells": 405181
+      }
+    },
+    "incumbent_evaluation": {
+      "validation": {
+        "mae_ft": 0.5664755989866692,
+        "persistence_mae_ft": 0.7873863512584689,
+        "windows": 77,
+        "scored_cells": 453076
+      },
+      "test": {
+        "mae_ft": 0.4328563947127764,
+        "persistence_mae_ft": 0.7062321848377817,
+        "windows": 71,
+        "scored_cells": 405181
+      }
+    }
+  },
+  "physics": {
+    "selection": {
+      "selected_at_utc": "2026-11-17T22:29:07.852434+00:00",
+      "criterion": "Minimum two-seed ensemble mean per-window validation MAE in feet; candidate order breaks exact ties.",
+      "winner": "huber-025",
+      "chosen_config": {
+        "loss": "huber",
+        "huber_beta": 0.25,
+        "learning_rate": 0.001,
+        "weight_decay": 0.0001,
+        "seeds": [
+          42,
+          43
+        ],
+        "epochs": 36,
+        "batch_size": 8192
+      },
+      "validation_mae_ft": 0.6426450729687873,
+      "test_evaluations_during_selection": 0,
+      "historical_test_exposure": "The 2025/2026 test results were previously inspected; this is validation-only retuning, not a newly untouched holdout."
+    },
+    "candidates": [
+      {
+        "name": "original-mse",
+        "config": {
+          "loss": "mse",
+          "huber_beta": 0.5,
+          "learning_rate": 0.001,
+          "weight_decay": 0.0001,
+          "seeds": [
+            42,
+            43
+          ],
+          "epochs": 36,
+          "batch_size": 8192
+        },
+        "validation": {
+          "mae_ft": 0.6615491065568574,
+          "persistence_mae_ft": 0.787386351258469,
+          "pooled_mae_ft": 0.6616285448514057,
+          "rmse_ft": 1.024325594681984,
+          "bias_ft": -0.2036260533974081,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "selected_epochs": [
+          12,
+          12
+        ],
+        "kappa_m2_day": [
+          0.15929755568504333,
+          0.16019243001937866
+        ]
+      },
+      {
+        "name": "mae",
+        "config": {
+          "loss": "mae",
+          "huber_beta": 0.5,
+          "learning_rate": 0.001,
+          "weight_decay": 0.0001,
+          "seeds": [
+            42,
+            43
+          ],
+          "epochs": 36,
+          "batch_size": 8192
+        },
+        "validation": {
+          "mae_ft": 0.6565917840790595,
+          "persistence_mae_ft": 0.787386351258469,
+          "pooled_mae_ft": 0.6566376794330259,
+          "rmse_ft": 0.9975941198491716,
+          "bias_ft": -0.30699387229964753,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "selected_epochs": [
+          36,
+          30
+        ],
+        "kappa_m2_day": [
+          0.09630818665027618,
+          0.09501077979803085
+        ]
+      },
+      {
+        "name": "huber-025",
+        "config": {
+          "loss": "huber",
+          "huber_beta": 0.25,
+          "learning_rate": 0.001,
+          "weight_decay": 0.0001,
+          "seeds": [
+            42,
+            43
+          ],
+          "epochs": 36,
+          "batch_size": 8192
+        },
+        "validation": {
+          "mae_ft": 0.6426450729687873,
+          "persistence_mae_ft": 0.787386351258469,
+          "pooled_mae_ft": 0.6427018505737293,
+          "rmse_ft": 1.0019405213823858,
+          "bias_ft": -0.25080291135203514,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "selected_epochs": [
+          12,
+          30
+        ],
+        "kappa_m2_day": [
+          0.1427253633737564,
+          0.10619068890810013
+        ]
+      },
+      {
+        "name": "huber-050",
+        "config": {
+          "loss": "huber",
+          "huber_beta": 0.5,
+          "learning_rate": 0.001,
+          "weight_decay": 0.0001,
+          "seeds": [
+            42,
+            43
+          ],
+          "epochs": 36,
+          "batch_size": 8192
+        },
+        "validation": {
+          "mae_ft": 0.648596063835863,
+          "persistence_mae_ft": 0.787386351258469,
+          "pooled_mae_ft": 0.6486717428447063,
+          "rmse_ft": 0.9954649812460877,
+          "bias_ft": -0.2726449419657868,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "selected_epochs": [
+          18,
+          30
+        ],
+        "kappa_m2_day": [
+          0.1439744234085083,
+          0.12365467846393585
+        ]
+      },
+      {
+        "name": "mae-l2-001",
+        "config": {
+          "loss": "mae",
+          "huber_beta": 0.5,
+          "learning_rate": 0.001,
+          "weight_decay": 0.001,
+          "seeds": [
+            42,
+            43
+          ],
+          "epochs": 36,
+          "batch_size": 8192
+        },
+        "validation": {
+          "mae_ft": 0.6559348248244854,
+          "persistence_mae_ft": 0.787386351258469,
+          "pooled_mae_ft": 0.6560136318857659,
+          "rmse_ft": 1.0176937502960748,
+          "bias_ft": -0.2373952149798374,
+          "windows": 77,
+          "scored_cells": 453076
+        },
+        "selected_epochs": [
+          27,
+          18
+        ],
+        "kappa_m2_day": [
+          0.09781870990991592,
+          0.13134580850601196
+        ]
+      }
+    ],
+    "evaluation": {
+      "validation": {
+        "mae_ft": 0.6426450729687873,
+        "persistence_mae_ft": 0.787386351258469,
+        "pooled_mae_ft": 0.6427018505737293,
+        "rmse_ft": 1.0019405213823858,
+        "bias_ft": -0.25080291135203514,
+        "windows": 77,
+        "scored_cells": 453076
+      },
+      "test": {
+        "mae_ft": 0.5183558315219524,
+        "persistence_mae_ft": 0.7062321848377816,
+        "pooled_mae_ft": 0.5191321972090678,
+        "rmse_ft": 0.8035918244558695,
+        "bias_ft": -0.10959232255876673,
+        "windows": 71,
+        "scored_cells": 405181
+      }
+    }
+  },
+  "data_handling": {
+    "core_cells": 5962,
+    "core_rule": "At least 80% coverage of unique training-window maps.",
+    "origin_and_target": "Measured pairs only; no map or target gap filling.",
+    "older_predictors": "Training medians and explicit missingness indicators.",
+    "drivers": "Strictly before origin; 80% daily coverage; no future observed drivers.",
+    "events": "Primary scores retain future deepening/dredging; flags are historical depth-change heuristics.",
+    "calendar": "Daily reanalysis and date-only alignment underpin the backtest; a live driver feed was not evaluated."
+  }
+}
