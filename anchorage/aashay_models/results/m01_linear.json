@@ -1,0 +1,15 @@
+{
+ "model": "m01_linear",
+ "val_mae": 0.5933669805526733,
+ "val_hot_mae": 0.701805591583252,
+ "test_mae": 0.5299037098884583,
+ "test_hot_mae": 0.6334764361381531,
+ "test_rmse": 0.76883465051651,
+ "test_median_ae": 0.3781958818435669,
+ "test_bias": -0.040177322924137115,
+ "test_auroc": 0.8539083963117376,
+ "test_ap": 0.5899931823696928,
+ "test_vs_persistence_pct": 24.096542358398438,
+ "seconds": 87,
+ "chosen": "huber_e2.0"
+}

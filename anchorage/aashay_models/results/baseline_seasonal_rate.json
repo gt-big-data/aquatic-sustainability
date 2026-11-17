@@ -1,0 +1,14 @@
+{
+ "model": "baseline_seasonal_rate",
+ "val_mae": 0.6495041251182556,
+ "val_hot_mae": 0.7522143125534058,
+ "test_mae": 0.6336638927459717,
+ "test_hot_mae": 0.7918012738227844,
+ "test_rmse": 0.8931798338890076,
+ "test_median_ae": 0.4677017033100128,
+ "test_bias": 0.22097164392471313,
+ "test_auroc": 0.7578225886895654,
+ "test_ap": 0.49527174846419925,
+ "test_vs_persistence_pct": 9.233927726745605,
+ "seconds": 0
+}

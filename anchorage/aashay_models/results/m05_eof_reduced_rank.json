@@ -1,0 +1,17 @@
+{
+ "model": "m05_eof_reduced_rank",
+ "val_mae": 0.5737464427947998,
+ "val_hot_mae": 0.6014235019683838,
+ "test_mae": 0.6259234547615051,
+ "test_hot_mae": 0.6713160276412964,
+ "test_rmse": 0.9235545992851257,
+ "test_median_ae": 0.4366467595100403,
+ "test_bias": -0.2686426043510437,
+ "test_auroc": 0.8322581392035213,
+ "test_ap": 0.5783601608719124,
+ "test_vs_persistence_pct": 10.342669486999512,
+ "seconds": 7,
+ "kx": 8,
+ "ky": 4,
+ "alpha": 100
+}

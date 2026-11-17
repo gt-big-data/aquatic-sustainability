@@ -1,0 +1,27 @@
+{
+ "model": "m02_lightgbm",
+ "val_mae": 0.5598695278167725,
+ "val_hot_mae": 0.660243034362793,
+ "test_mae": 0.4484560489654541,
+ "test_hot_mae": 0.4611552357673645,
+ "test_rmse": 0.6726815700531006,
+ "test_median_ae": 0.32196447253227234,
+ "test_bias": -0.009219412691891193,
+ "test_auroc": 0.8847533010914147,
+ "test_ap": 0.7210428828835339,
+ "test_vs_persistence_pct": 35.76311492919922,
+ "seconds": 101,
+ "best_iter": 272,
+ "top_features": [
+  "clim_harm",
+  "clim_harm_nb",
+  "d3",
+  "row",
+  "col",
+  "shipcreek_flow_mean",
+  "grad",
+  "clim_season",
+  "shipcreek_flow_last",
+  "nb9"
+ ]
+}

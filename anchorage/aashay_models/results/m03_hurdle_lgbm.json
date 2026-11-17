@@ -1,0 +1,15 @@
+{
+ "model": "m03_hurdle_lgbm",
+ "val_mae": 0.5571610927581787,
+ "val_hot_mae": 0.6579999923706055,
+ "test_mae": 0.4429403245449066,
+ "test_hot_mae": 0.4510381817817688,
+ "test_rmse": 0.6691493391990662,
+ "test_median_ae": 0.3151094317436218,
+ "test_bias": -0.01796502247452736,
+ "test_auroc": 0.8906547460163294,
+ "test_ap": 0.73521765112855,
+ "test_vs_persistence_pct": 36.553184509277344,
+ "seconds": 938,
+ "combine": "expected"
+}

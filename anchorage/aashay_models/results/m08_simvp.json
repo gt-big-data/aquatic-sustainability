@@ -1,0 +1,23 @@
+{
+ "model": "m08_simvp",
+ "val_mae": 0.6042709350585938,
+ "val_hot_mae": 0.7352386713027954,
+ "test_mae": 0.520596981048584,
+ "test_hot_mae": 0.5853447318077087,
+ "test_rmse": 0.7640321850776672,
+ "test_median_ae": 0.3745882213115692,
+ "test_bias": 0.013038328848779202,
+ "test_auroc": 0.8576603924354808,
+ "test_ap": 0.5959872791301144,
+ "test_vs_persistence_pct": 25.429641723632812,
+ "seconds": 129,
+ "params": 94097,
+ "best_epoch": 1,
+ "epochs": 10,
+ "seed": 0,
+ "crop": null,
+ "lr": 0.0005,
+ "wd": 0.05,
+ "loyo_clim": true,
+ "val_mae_untrained": 0.6062172055244446
+}

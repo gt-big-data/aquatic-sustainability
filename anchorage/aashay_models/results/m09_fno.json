@@ -1,0 +1,23 @@
+{
+ "model": "m09_fno",
+ "val_mae": 0.6037698984146118,
+ "val_hot_mae": 0.7333848476409912,
+ "test_mae": 0.5209359526634216,
+ "test_hot_mae": 0.5856661200523376,
+ "test_rmse": 0.7640873193740845,
+ "test_median_ae": 0.375154584646225,
+ "test_bias": 0.01633748784661293,
+ "test_auroc": 0.8577950051774349,
+ "test_ap": 0.5961218674554227,
+ "test_vs_persistence_pct": 25.381088256835938,
+ "seconds": 225,
+ "params": 2006817,
+ "best_epoch": 1,
+ "epochs": 10,
+ "seed": 0,
+ "crop": null,
+ "lr": 0.0005,
+ "wd": 0.05,
+ "loyo_clim": true,
+ "val_mae_untrained": 0.6062172055244446
+}
