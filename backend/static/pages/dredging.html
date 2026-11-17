@@ -1,62 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Dredging forecasts · Aquatic Sustainability</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dredging · Aquatic Sustainability</title>
 <link rel="stylesheet" href="/static/css/styles.css" />
-<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
 <link rel="stylesheet" href="/static/css/dredging-forecast.css" />
 </head>
 <body>
 <div data-navbar-root></div>
-<main class="dredging-page">
-<header class="dredging-header"><p class="dredging-eyebrow">Anchorage · 10 m bathymetry</p><h1>Channel depth forecasts</h1><p>Explore model predictions over the surveyed channel. Compare depth and change, then download the same map as GeoJSON.</p></header>
-<p id="forecast-status" class="forecast-status" role="status" aria-live="polite">Loading historical forecast preview…</p>
-<p id="forecast-error" class="forecast-error" role="alert" hidden></p>
-<div id="forecast-content" hidden>
-<section class="dredging-summary" aria-label="Displayed area summary">
-<div><span>Predicted cells</span><strong id="cell-count">—</strong><small>10 m × 10 m each</small></div>
-<div><span>Mean predicted depth</span><strong id="mean-depth">—</strong><small>ft below low tide</small></div>
-<div><span>Mean predicted change</span><strong id="mean-change">—</strong><small>negative = shallower</small></div>
-<div><span>Predicted shoaling hotspots</span><strong id="hotspot-area">—</strong><small>area losing at least 1 ft</small></div>
+
+<main class="workspace dredging-workspace">
+<section class="map-panel" aria-label="Dredging forecast map and controls">
+  <div class="filter-overlay" id="filterOverlay">
+    <div class="filter-section">
+      <h3>Dredging</h3>
+      <p class="forecast-eyebrow">Anchorage · 10 m prediction cells</p>
+    </div>
+
+    <div class="filter-section forecast-controls">
+      <label for="forecast-model">Model</label>
+      <select id="forecast-model" disabled aria-describedby="model-evaluation"></select>
+      <p id="model-evaluation" class="forecast-help">Held-out MAE: <strong id="model-score">—</strong> ft. Lower is better.</p>
+
+      <label for="forecast-date">Survey → prediction date</label>
+      <select id="forecast-date" disabled aria-describedby="timeline-help"></select>
+      <input id="forecast-frame" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Choose the starting survey date" aria-describedby="frame-target timeline-help" />
+      <p class="forecast-dates"><span>From survey</span><output id="frame-origin" for="forecast-frame">—</output></p>
+      <p class="forecast-dates" id="frame-target"><span>Predicted for</span><strong id="frame-predicted-for">—</strong></p>
+      <p id="timeline-help" class="status-note">Historical preview · 28-day forecasts. These predictions are not a live survey or navigation chart.</p>
+
+      <div class="toggle-buttons" role="group" aria-label="Color prediction cells by">
+        <button class="toggle-btn active" data-mode="depth" type="button" aria-pressed="true">Depth</button>
+        <button class="toggle-btn" data-mode="change" type="button" aria-pressed="false">Change</button>
+      </div>
+      <div class="legend" aria-label="Map color legend">
+        <div class="legend-gradient" id="legendGradient"></div>
+        <div class="legend-scale">
+          <span id="legendMin">0</span>
+          <span id="legendCaption" class="legend-caption">Depth (ft)</span>
+          <span id="legendMax">80</span>
+        </div>
+        <p id="legend-description" class="forecast-help"></p>
+      </div>
+      <label class="forecast-checkbox"><input id="show-hotspots" type="checkbox" /> Mark predicted shoaling hotspots</label>
+
+      <div class="dist-section" aria-labelledby="distTitle" id="distContent" aria-busy="true">
+        <h4 id="distTitle">Depth distribution</h4>
+        <p id="distribution-empty" class="forecast-help">Loading the forecast index…</p>
+        <svg id="distribution-chart" viewBox="0 0 300 204" role="img" aria-labelledby="distribution-chart-title distribution-chart-description" hidden></svg>
+        <table class="dist-stats" aria-label="All cells in the selected forecast">
+          <tbody>
+            <tr><th scope="row">Prediction cells</th><td id="cell-count">—</td></tr>
+            <tr><th scope="row">Map footprint</th><td id="distribution-area">—</td></tr>
+            <tr><th scope="row">Min</th><td id="distribution-min">—</td></tr>
+            <tr><th scope="row">Median</th><td id="distribution-median">—</td></tr>
+            <tr><th scope="row">Mean</th><td id="distribution-mean">—</td></tr>
+            <tr><th scope="row">Max</th><td id="distribution-max">—</td></tr>
+          </tbody>
+        </table>
+        <p class="forecast-help">All cells in this forecast; bins stay fixed across dates and models. End bars include values beyond the color scale.</p>
+      </div>
+
+      <a id="download-geojson" class="forecast-download" aria-disabled="true">Download this GeoJSON</a>
+      <p id="forecast-status" class="status-note" role="status" aria-live="polite">Loading historical forecast preview…</p>
+      <p id="forecast-error" class="forecast-error" role="alert" hidden></p>
+      <details class="forecast-details">
+        <summary>About this preview</summary>
+        <p>Depth is positive below low tide. Negative change means shallowing; positive change means deepening.</p>
+        <p>Only eligible cells with measured starting depths are shown. Empty areas are outside the prediction footprint.</p>
+        <p>MAE measures average absolute error on held-out survey dates; it is not a confidence interval. Forecasts alone do not determine when dredging is required.</p>
+      </details>
+    </div>
+  </div>
+
+  <div id="map" aria-label="Satellite map of predicted channel depths in Anchorage"></div>
+  <p id="basemap-status" class="basemap-status" role="status">Loading satellite map…</p>
 </section>
-<div class="dredging-layout">
-<section class="forecast-map-card" aria-label="Geographic forecast overlay">
-<div class="forecast-timeline">
-<label for="forecast-frame">Last input survey</label><output id="frame-origin" for="forecast-frame">—</output>
-<input id="forecast-frame" type="range" min="0" max="0" value="0" step="1" aria-describedby="frame-target timeline-help" />
-<p id="frame-target">—</p><p id="timeline-help">Historical preview: the slider changes the starting survey; each prediction is 28 days ahead.</p>
-</div>
-<div id="map" aria-label="Map of predicted channel depths in Anchorage"></div>
-<div class="forecast-legend" aria-label="Map color legend"><div id="legend-gradient"></div><div class="legend-values"><span id="legend-min"></span><span id="legend-max"></span></div><p id="legend-description"></p></div>
-<p id="basemap-status" class="forecast-map-note" hidden>Background tiles are unavailable. The geographic prediction overlay still works.</p>
-</section>
-<aside class="forecast-sidebar" aria-label="Forecast controls and interpretation">
-<section class="forecast-panel"><h2>Explore the map</h2>
-<label for="forecast-model">Model</label><select id="forecast-model"></select>
-<label for="forecast-layer">Color cells by</label><select id="forecast-layer"><option value="change">Predicted change (ft)</option><option value="depth">Predicted depth (ft)</option></select>
-<label class="forecast-checkbox"><input id="show-hotspots" type="checkbox" /> Mark predicted shoaling hotspots</label>
-<p class="forecast-help">Markers group nearby cells predicted to lose at least 1 ft. Select a cell for its depth and change.</p>
-<a id="download-geojson" class="forecast-download" aria-disabled="true">Download this GeoJSON</a></section>
-<section class="forecast-panel forecast-distribution" aria-labelledby="distribution-title">
-<h2 id="distribution-title">Change distribution</h2>
-<p id="distribution-empty" class="forecast-help">Waiting for the selected forecast.</p>
-<svg id="distribution-chart" viewBox="0 0 300 204" role="img" aria-labelledby="distribution-chart-title distribution-chart-description" hidden></svg>
-<table class="forecast-distribution-stats" aria-label="Selected map footprint statistics"><tbody>
-<tr><th scope="row">Cells on map</th><td id="distribution-count">—</td></tr>
-<tr><th scope="row">Map footprint</th><td id="distribution-area">—</td></tr>
-<tr><th scope="row">Minimum</th><td id="distribution-min">—</td></tr>
-<tr><th scope="row">Median</th><td id="distribution-median">—</td></tr>
-<tr><th scope="row">Mean</th><td id="distribution-mean">—</td></tr>
-<tr><th scope="row">Maximum</th><td id="distribution-max">—</td></tr>
-</tbody></table>
-<p class="forecast-help">All cells in the displayed map footprint. Bins stay fixed across dates and models; end bars include values beyond the color scale.</p>
-</section>
-<section class="forecast-panel"><h2>Model performance</h2><p id="model-name">—</p><p class="forecast-score"><strong id="model-score">—</strong> ft MAE</p><p class="forecast-help">Mean absolute error on held-out survey dates. Lower is better; this is an evaluation score, not a confidence interval.</p></section>
-<section class="forecast-panel"><h2>Reading this preview</h2><p>Depth is positive below low tide. A negative change means shallowing; a positive change means deepening.</p><p>Only eligible cells with a measured starting depth are shown. Empty areas are outside this prediction footprint, not zero depth.</p><p>These are historical forecasts, not a live survey or navigation chart. Predicting a dredging date needs required channel depths and intervention records.</p></section>
-</aside>
-</div>
-</div>
 </main>
-<script src="/static/vendor/leaflet/leaflet.js" defer></script><script src="/static/js/components/navbar.js" defer></script><script src="/static/js/main.js" defer></script><script src="/static/js/pages/dredgingForecast.js" defer></script>
-</body></html>
+
+<script src="/static/js/components/navbar.js" defer></script>
+<script src="/static/js/main.js" defer></script>
+<script src="/static/js/pages/dredgingForecast.js" defer></script>
+</body>
+</html>

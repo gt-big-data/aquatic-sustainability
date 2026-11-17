@@ -139,13 +139,8 @@ body {
 .logo {
     width: 28px;
     height: 28px;
-    filter: drop-shadow(0 1px 0 rgba(0,0,0,.2));
-    transition: filter 0.3s ease;
 }
 
-html:not(.light) .logo {
-    filter: brightness(0) invert(1) drop-shadow(0 1px 0 rgba(255,255,255,.2));
-}
 .brand-title {
     font-weight: 700;
     letter-spacing: .2px;

@@ -89,13 +89,13 @@ Every GeoJSON follows the attachment's exact property keys:
 
 Coordinates above illustrate structure only; exports contain WGS84 longitude/latitude corners of actual 10 m cells. Each polygon has four distinct corners and a repeated first corner. `depth_ft` is origin depth plus predicted change; negative `change_ft` means shallower. No model-specific fields are added to these properties. The verifier checks dates, finite numbers, closed rings, duplicates, common model footprints, local asset paths and optional containment within the attachment.
 
-Publication writes all GeoJSON assets before switching the manifest. The existing Flask website serves those static assets on `/dredging`; serving the page requires neither PyTorch nor XGBoost and performs no online training. Generated static files are the deployable result; model artifacts and downloaded training data remain in the ignored cache.
+Publication writes all GeoJSON assets before switching the manifest. The existing Flask website serves those assets on `/dredging`. Its Google Maps satellite view loads the selected model/date from the manifest, with fixed depth/change scales, a histogram, statistics, cell/date popups and optional shoaling markers. The dredging page reads precomputed predictions; the existing backend requirements still apply. Generated static files are the deployable result; trained model artifacts and downloaded training data remain in the ignored cache.
 
-For a local preview, install `backend/requirements.txt` in the website environment and run the existing Flask app.
+For a local preview, install `backend/requirements.txt` in the website environment. Set `SECRET_KEY` and `GOOGLE_MAPS_API_KEY` in the ignored `backend/.env` file as `KEY=value` entries, then run the existing Flask app. The Maps key is read through the existing `/api/config/maps-key` endpoint. Nested environment files are also excluded from Docker build contexts.
 
 ```bash
 cd backend
-SECRET_KEY=local-preview-only FAST_START_FLOOD_DATA=1 python -m flask --app run:app run --port 5076
+FAST_START_FLOOD_DATA=1 python -m flask --app run:app run --port 5076
 ```
 
 Open `http://127.0.0.1:5076/dredging` and use **Skip Login** if prompted.
