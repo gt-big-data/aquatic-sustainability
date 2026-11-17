@@ -137,6 +137,32 @@
     width: 100%;
     height: calc(100vh - 80px);
   }
+  .dredging-popup { min-width: 195px; color: #182433; background: white; font: 14px/1.4 system-ui, sans-serif; }
+  .dredging-popup-title { margin: 0; color: #182433; font: 700 17px/1.4 system-ui, sans-serif; }
+  #map .gm-style-iw-chr:has(.dredging-popup-title) {
+    display: flex;
+    align-items: center;
+    padding-block: 6px;
+  }
+  #map .gm-style-iw-ch:has(.dredging-popup-title) {
+    padding-block: 0;
+  }
+  #map .gm-style-iw-chr:has(.dredging-popup-title) .gm-ui-hover-effect {
+    /* Maps sets the default button dimensions inline. */
+    width: 28px !important;
+    height: 28px !important;
+    align-self: center;
+    display: grid !important;
+    place-items: center;
+    margin: 0 6px !important;
+  }
+  #map .gm-style-iw-chr:has(.dredging-popup-title) .gm-ui-hover-effect > span {
+    margin: 0 !important;
+    transform: scale(0.75);
+  }
+  .dredging-popup dl { margin: 0; }
+  .dredging-popup dl > div { display: flex; justify-content: space-between; gap: 18px; padding: 7px 0; border-top: 1px solid #e3e7eb; }
+  .dredging-popup dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -181,6 +207,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   let map;
+  let predictionPopup;
   let dredgingPolygons = [];
   let dredgingFeatures = [];
   let currentMode = 'depth';
@@ -210,6 +237,11 @@
       renderingType: 'RASTER',
       styles: HIDDEN_MAP_FEATURES,
     });
+    const title = document.createElement('h3');
+    title.className = 'dredging-popup-title';
+    title.textContent = 'Dredging Prediction';
+    predictionPopup = new google.maps.InfoWindow({ headerContent: title, ariaLabel: title.textContent });
+    map.addListener('click', () => predictionPopup.close());
     loadDredgingPolygons();
   }
 
@@ -261,8 +293,6 @@
       const value = mode === 'depth' ? feature.properties.depth_ft
         : feature.properties.change_ft;  
 
-      let setting;
-
       const color = colorForMetric(mode, value);
 
       const polygon = new google.maps.Polygon({
@@ -273,12 +303,29 @@
           fillOpacity: 0.8,
           map: map
       });
+      polygon.addListener('click', event => {
+        predictionPopup.setContent(predictionContent(feature.properties));
+        predictionPopup.setPosition(event.latLng);
+        predictionPopup.open({ map });
+      });
       dredgingPolygons.push(polygon);
       
     });
 
   }
   
+  function predictionContent({ depth_ft, change_ft }) {
+    const feet = (value, signed = false) => Number.isFinite(value)
+      ? `${signed && value > 0 ? '+' : ''}${value.toFixed(2)} ft`
+      : 'Unavailable';
+    return `<div class="dredging-popup">
+      <dl>
+        <div><dt>Predicted Depth</dt><dd>${feet(depth_ft)}</dd></div>
+        <div><dt>Depth Change</dt><dd>${feet(change_ft, true)}</dd></div>
+      </dl>
+    </div>`;
+  }
+
   async function loadDredgingPolygons() {
     try {
       const response = await fetch(
