@@ -1,6 +1,6 @@
 """Anchorage shoaling: baselines + grid-graph GNN.
 
-From K depth maps (+ gaps, season, static cell info) predict the change in depth
+Task: from K depth maps (+ gaps, season, static cell info) predict the change in depth
 (target - last input) over the horizon, on core-channel cells, graded only where masks[n] is True.
 Also reports the hot-spot task: will the cell shoal by more than 1 ft (delta < -1)?
 
@@ -16,10 +16,12 @@ HOT = -1.0   # ft: delta below this = hot spot (cell got >1 ft shallower)
 
 
 # ----------------------------------------------------------------------------- data
-def build(path, groups=(), long_window=0):
+def build(path, groups=(), long_window=0, split_override=None):
     d = np.load(path, allow_pickle=True)
     maps, dred, core = d['maps'], d['dredged'], d['core']
     W, masks, split, dates = d['windows'], d['masks'], d['split'], d['dates']
+    if split_override is not None:                           # e.g. leave-one-season-out folds
+        split = np.asarray(split_override)
     K = int(d['K']); S = len(W); rr, cc = np.where(core); N = len(rr)
 
     cm, dm = maps[:, core], dred[:, core]                    # (surveys, N)
