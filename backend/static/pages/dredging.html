@@ -5,584 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dredging · Aquatic Sustainability</title>
 <link rel="stylesheet" href="/static/css/styles.css" />
-<style>
-  :root {
-    --dredging-accent-color: #ec4899;
-  }
-
-  .toggle-buttons {
-    display: flex;
-    gap: 6px;
-  }
-
-  .toggle-btn {
-    flex: 1;
-    padding: 7px 10px;
-    border: 2px solid var(--border);
-    background: transparent;
-    color: var(--text);
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .toggle-btn.active {
-    background: var(--dredging-accent-color);
-    border-color: var(--dredging-accent-color);
-    color: white;
-  }
-
-  .legend {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .legend-gradient {
-    height: 10px;
-    border-radius: 4px;
-    width: 100%;
-  }
-
-  .legend-scale {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  .legend-caption {
-    font-size: 12px;
-    color: var(--text);
-    font-weight: 500;
-  }
-
-  .filter-overlay {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 10;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    width: 280px;
-    max-height: calc(100vh - 120px);
-    overflow-y: auto;
-    box-sizing: border-box;
-    backdrop-filter: blur(10px);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-  }
-
-  .dist-section {
-    margin: 14px 0 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
-  }
-
-  .dist-section h4 {
-    margin: 0 0 8px 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .dist-chart {
-    position: relative;
-    height: 160px;
-    width: 100%;
-  }
-
-  .dist-stats {
-    width: 100%;
-    margin-top: 10px;
-    font-size: 12px;
-    border-collapse: collapse;
-    color: var(--text);
-  }
-
-  .dist-stats th {
-    padding: 2px 0;
-    text-align: left;
-    font-weight: 500;
-    color: var(--muted);
-  }
-
-  .dist-stats td {
-    padding: 2px 0;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .filter-overlay h3 {
-    margin: 0 0 8px 0;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .status-note {
-    font-size: 12px;
-    color: var(--muted);
-    padding: 8px 10px;
-    background: var(--bg);
-    border-radius: 6px;
-    border: 1px solid var(--border);
-  }
-
-  #map {
-    width: 100%;
-    height: calc(100vh - 80px);
-  }
-  .dredging-popup { min-width: 195px; color: #182433; background: white; font: 14px/1.4 system-ui, sans-serif; }
-  .dredging-popup-title { margin: 0; color: #182433; font: 700 17px/1.4 system-ui, sans-serif; }
-  #map .gm-style-iw-chr:has(.dredging-popup-title) {
-    display: flex;
-    align-items: center;
-    padding-block: 6px;
-  }
-  #map .gm-style-iw-ch:has(.dredging-popup-title) {
-    padding-block: 0;
-  }
-  #map .gm-style-iw-chr:has(.dredging-popup-title) .gm-ui-hover-effect {
-    /* Maps sets the default button dimensions inline. */
-    width: 28px !important;
-    height: 28px !important;
-    align-self: center;
-    display: grid !important;
-    place-items: center;
-    margin: 0 6px !important;
-  }
-  #map .gm-style-iw-chr:has(.dredging-popup-title) .gm-ui-hover-effect > span {
-    margin: 0 !important;
-    transform: scale(0.75);
-  }
-  .dredging-popup dl { margin: 0; }
-  .dredging-popup dl > div { display: flex; justify-content: space-between; gap: 18px; padding: 7px 0; border-top: 1px solid #e3e7eb; }
-  .dredging-popup dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; }
-</style>
+<link rel="stylesheet" href="/static/css/dredging-forecast.css" />
 </head>
 <body>
 <div data-navbar-root></div>
 
-<main class="workspace">
-<section class="map-panel" style="position: relative;">
-
-<div class="filter-overlay" id="filterOverlay">
-  <div class="filter-section">
-    <h3>Dredging</h3>
-  </div>
-
-  <div class="filter-section">
-    <div class="toggle-buttons">
-      <button class="toggle-btn active" data-mode="depth">Depth</button>
-      <button class="toggle-btn" data-mode="change">Change</button>
+<main class="workspace dredging-workspace">
+<section class="map-panel" aria-label="Dredging forecast map and controls">
+  <div class="filter-overlay" id="filterOverlay">
+    <div class="filter-section">
+      <h3>Dredging</h3>
+      <p class="forecast-eyebrow">Anchorage · 10 m prediction cells</p>
     </div>
 
-    <div class="legend" style="margin-top: 10px;">
-      <div class="legend-gradient" id="legendGradient"></div>
-      <div class="legend-scale">
-        <span id="legendMin">–</span>
-        <span id="legendCaption" class="legend-caption">Depth (ft)</span>
-        <span id="legendMax">–</span>
+    <div class="filter-section forecast-controls">
+      <label for="forecast-model">Model</label>
+      <select id="forecast-model" disabled aria-describedby="model-evaluation"></select>
+      <p id="model-evaluation" class="forecast-help">Held-out MAE: <strong id="model-score">—</strong> ft. Lower is better.</p>
+
+      <label for="forecast-date">Survey → prediction date</label>
+      <select id="forecast-date" disabled aria-describedby="timeline-help"></select>
+      <input id="forecast-frame" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Choose the starting survey date" aria-describedby="frame-target timeline-help" />
+      <p class="forecast-dates"><span>From survey</span><output id="frame-origin" for="forecast-frame">—</output></p>
+      <p class="forecast-dates" id="frame-target"><span>Predicted for</span><strong id="frame-predicted-for">—</strong></p>
+      <p id="timeline-help" class="status-note">Historical preview · 28-day forecasts. These predictions are not a live survey or navigation chart.</p>
+
+      <div class="toggle-buttons" role="group" aria-label="Color prediction cells by">
+        <button class="toggle-btn active" data-mode="depth" type="button" aria-pressed="true">Depth</button>
+        <button class="toggle-btn" data-mode="change" type="button" aria-pressed="false">Change</button>
       </div>
-    </div>
+      <div class="legend" aria-label="Map color legend">
+        <div class="legend-gradient" id="legendGradient"></div>
+        <div class="legend-scale">
+          <span id="legendMin">0</span>
+          <span id="legendCaption" class="legend-caption">Depth (ft)</span>
+          <span id="legendMax">80</span>
+        </div>
+        <p id="legend-description" class="forecast-help"></p>
+      </div>
+      <label class="forecast-checkbox"><input id="show-hotspots" type="checkbox" /> Mark predicted shoaling hotspots</label>
 
-    <div class="dist-section" aria-labelledby="distTitle">
-      <h4 id="distTitle">Depth distribution</h4>
-      <div id="distContent"></div>
-    </div>
+      <div class="dist-section" aria-labelledby="distTitle" id="distContent" aria-busy="true">
+        <h4 id="distTitle">Depth distribution</h4>
+        <p id="distribution-empty" class="forecast-help">Loading the forecast index…</p>
+        <svg id="distribution-chart" viewBox="0 0 300 204" role="img" aria-labelledby="distribution-chart-title distribution-chart-description" hidden></svg>
+        <table class="dist-stats" aria-label="All cells in the selected forecast">
+          <tbody>
+            <tr><th scope="row">Prediction cells</th><td id="cell-count">—</td></tr>
+            <tr><th scope="row">Map footprint</th><td id="distribution-area">—</td></tr>
+            <tr><th scope="row">Min</th><td id="distribution-min">—</td></tr>
+            <tr><th scope="row">Median</th><td id="distribution-median">—</td></tr>
+            <tr><th scope="row">Mean</th><td id="distribution-mean">—</td></tr>
+            <tr><th scope="row">Max</th><td id="distribution-max">—</td></tr>
+          </tbody>
+        </table>
+        <p class="forecast-help">All cells in this forecast; bins stay fixed across dates and models. End bars include values beyond the color scale.</p>
+      </div>
 
-    <div class="status-note">Model predictions coming soon.</div>
+      <a id="download-geojson" class="forecast-download" aria-disabled="true">Download this GeoJSON</a>
+      <p id="forecast-status" class="status-note" role="status" aria-live="polite">Loading historical forecast preview…</p>
+      <p id="forecast-error" class="forecast-error" role="alert" hidden></p>
+      <details class="forecast-details">
+        <summary>About this preview</summary>
+        <p>Depth is positive below low tide. Negative change means shallowing; positive change means deepening.</p>
+        <p>Only eligible cells with measured starting depths are shown. Empty areas are outside the prediction footprint.</p>
+        <p>MAE measures average absolute error on held-out survey dates; it is not a confidence interval. Forecasts alone do not determine when dredging is required.</p>
+      </details>
+    </div>
   </div>
-</div>
 
-  <div id="map"></div>
+  <div id="map" aria-label="Satellite map of predicted channel depths in Anchorage"></div>
+  <p id="basemap-status" class="basemap-status" role="status">Loading satellite map…</p>
 </section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script>
-  let map;
-  let predictionPopup;
-  let dredgingPolygons = [];
-  let dredgingFeatures = [];
-  let currentMode = 'depth';
-
-  const COLORMAPS = {
-    depth:   [[255, 255, 255], [250, 204, 21],  [239, 68, 68]],   // white → yellow → red
-    change: [[255, 255, 255], [168, 85, 247],  [236, 72, 153]],  // white → purple → magenta
-  };
-
-  const HIDDEN_MAP_FEATURES = [
-    {
-      featureType: 'poi.business',
-      stylers: [{ visibility: 'off' }],
-    },
-    {
-      featureType: 'transit',
-      elementType: 'labels.icon',
-      stylers: [{ visibility: 'off' }],
-    },
-  ];
-  
-  function initMap() {
-    map = new google.maps.Map(document.getElementById('map'), {
-      center: { lat: 61.2254, lng: -149.9051 },
-      zoom: 14,
-      mapTypeId: 'hybrid',
-      renderingType: 'RASTER',
-      styles: HIDDEN_MAP_FEATURES,
-    });
-    const title = document.createElement('h3');
-    title.className = 'dredging-popup-title';
-    title.textContent = 'Dredging Prediction';
-    predictionPopup = new google.maps.InfoWindow({ headerContent: title, ariaLabel: title.textContent });
-    map.addListener('click', () => predictionPopup.close());
-    loadDredgingPolygons();
-  }
-
-  fetch('/api/config/maps-key')
-    .then(res => res.json())
-    .then(data => {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${data.googleMapsApiKey || 'DEMO_KEY'}&callback=initMap`;
-      script.async = true;
-      document.head.appendChild(script);
-    });
-
-  function renderDredgingPolygons(features, options = {}) {
-    const {
-      append = false,
-      mode = 'depth'
-    } = options;
-    if (!append) {
-      dredgingPolygons.forEach(polygon => polygon.setMap(null));
-      dredgingPolygons = [];
-    }
-
-    if (!Array.isArray(features)) {
-        console.warn('renderDredgingPolygons: invalid features', features);
-        return;
-    }
-
-    features.forEach(feature => {
-      if (
-          !feature ||
-          !feature.geometry ||
-          feature.geometry.type !== 'Polygon' ||
-          !Array.isArray(feature.geometry.coordinates) ||
-          !feature.geometry.coordinates[0] ||
-          !feature.properties ||
-          typeof feature.properties !== 'object'
-      ) {
-          console.warn('renderDredgingPolygons: skipping invalid feature', feature);
-          return;
-      }
-
-      const paths = feature.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
-
-      if (paths.some(vertex => !Number.isFinite(vertex.lat) || !Number.isFinite(vertex.lng))) {
-        console.warn('renderDredgingPolygons: skipping polygon with invalid boundary', feature);
-        return;
-      }
-
-      const value = mode === 'depth' ? feature.properties.depth_ft
-        : feature.properties.change_ft;  
-
-      const color = colorForMetric(mode, value);
-
-      const polygon = new google.maps.Polygon({
-          paths: paths,
-          strokeColor: color,
-          strokeWeight: 3,
-          fillColor: color,
-          fillOpacity: 0.8,
-          map: map
-      });
-      polygon.addListener('click', event => {
-        predictionPopup.setContent(predictionContent(feature.properties));
-        predictionPopup.setPosition(event.latLng);
-        predictionPopup.open({ map });
-      });
-      dredgingPolygons.push(polygon);
-      
-    });
-
-  }
-  
-  function predictionContent({ depth_ft, change_ft }) {
-    const feet = (value, signed = false) => Number.isFinite(value)
-      ? `${signed && value > 0 ? '+' : ''}${value.toFixed(2)} ft`
-      : 'Unavailable';
-    return `<div class="dredging-popup">
-      <dl>
-        <div><dt>Predicted Depth</dt><dd>${feet(depth_ft)}</dd></div>
-        <div><dt>Depth Change</dt><dd>${feet(change_ft, true)}</dd></div>
-      </dl>
-    </div>`;
-  }
-
-  async function loadDredgingPolygons() {
-    try {
-      const response = await fetch(
-          '/static/DredgingPoints/sampledata.geojson'
-      );
-      if (!response.ok) {
-          throw new Error(`Failed to load GeoJSON: ${response.status}`);
-      }
-      const geojson = await response.json();
-      dredgingFeatures = geojson.features;
-      wireControls();
-
-      renderDredgingPolygons(dredgingFeatures, {
-        mode: currentMode
-      });
-
-      renderLegend(currentMode);
-      renderDistribution(currentMode);
-
-    } catch (error) {
-      console.error('Error loading dredging data:', error);
-    }
-  }
-
-  function lerp(a, b, t) {
-    return a + (b - a) * t;
-  }
-
-  function getMetricValues(mode) {
-    const property = mode === 'depth' ? 'depth_ft' : 'change_ft';
-    return dredgingFeatures
-      .map(feature => feature.properties[property])
-      .filter(Number.isFinite);
-  }
-
-  function getMetricRange(mode) {
-    const values = getMetricValues(mode);
-    return {
-      min: Math.min(...values),
-      max: Math.max(...values)
-    };
-  }
-
-  function colorForMetric(metric, value) {
-    if (!Number.isFinite(value)) return '#9ca3af';
-    const { min, max } = getMetricRange(metric);
-    const span = max - min;
-    let t = span > 0 ? (value - min) / span : 0;
-    t = Math.max(0, Math.min(1, t));
-    const ramp = COLORMAPS[metric];
-    const mid = 0.5;
-    let c0, c1, localT;
-    if (t <= mid) { c0 = ramp[0]; c1 = ramp[1]; localT = t / mid; } 
-    else          { c0 = ramp[1]; c1 = ramp[2]; localT = (t - mid) / (1 - mid); }
-    const r = Math.round(lerp(c0[0], c1[0], localT));
-    const g = Math.round(lerp(c0[1], c1[1], localT));
-    const b = Math.round(lerp(c0[2], c1[2], localT));
-    return `rgb(${r}, ${g}, ${b})`;
-  }
-
-  function gradientCss(metric) {
-    const ramp = COLORMAPS[metric];
-    const rgb = c => `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-    return `linear-gradient(to right, ${rgb(ramp[0])}, ${rgb(ramp[1])}, ${rgb(ramp[2])})`;
-  }
-
-  function renderLegend(metric) {
-    const { min, max } = getMetricRange(metric);
-    document.getElementById('legendGradient').style.background =
-      gradientCss(metric);
-    document.getElementById('legendCaption').textContent =
-      metric === 'depth' ? 'Depth (ft)' : 'Change (ft)';
-    document.getElementById('legendMin').textContent = min.toFixed(2);
-    document.getElementById('legendMax').textContent = max.toFixed(2);
-  }
-
-  // Picks a round bin width (1, 2, 2.5 or 5 times a power of ten) close to
-  // what the square-root rule asks for, clamped to 5–10 bins.
-  function niceBinWidth(min, max, count) {
-    const targetBins = Math.max(5, Math.min(10, Math.ceil(Math.sqrt(count))));
-    const raw = (max - min) / targetBins || Math.abs(max) / targetBins || 1;
-    const magnitude = 10 ** Math.floor(Math.log10(raw));
-    const binsFor = c => Math.floor(max / c) - Math.floor(min / c) + 1;
-    const candidates = [1, 2, 2.5, 5, 10, 20]
-      .map(m => parseFloat((m * magnitude).toPrecision(3)))
-      .filter(c => binsFor(c) <= 10);
-    return candidates.reduce((best, c) =>
-      Math.abs(Math.log(c / raw)) < Math.abs(Math.log(best / raw)) ? c : best
-    );
-  }
-
-  // Bins whose edges are multiples of the width, so edges land on round numbers
-  // and 0 is always an edge when the data spans it. Each bin includes its start
-  // and excludes its end.
-  function buildHistogram(values, min, max) {
-    const width = niceBinWidth(min, max, values.length);
-    // Epsilon keeps float error (e.g. 0.3 / 0.1 = 2.999…) from shifting a value down a bin.
-    const binIndex = value => Math.floor(value / width + 1e-9);
-    const first = binIndex(min);
-    const last = binIndex(max);
-    const bins = [];
-    for (let i = first; i <= last; i++) {
-      bins.push({
-        start: parseFloat((i * width).toPrecision(12)),
-        end: parseFloat(((i + 1) * width).toPrecision(12)),
-        count: 0,
-      });
-    }
-    values.forEach(value => {
-      bins[binIndex(value) - first].count++;
-    });
-    const decimals = (String(width).split('.')[1] || '').length;
-    return { bins, width, decimals };
-  }
-
-  function median(values) {
-    const sorted = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-
-  let distChart = null;
-
-  function renderDistribution(metric) {
-    const content = document.getElementById('distContent');
-    const label = metric === 'depth' ? 'Depth' : 'Change';
-    document.getElementById('distTitle').textContent = `${label} distribution`;
-    if (distChart) {
-      distChart.destroy();
-      distChart = null;
-    }
-    content.replaceChildren();
-
-    const values = getMetricValues(metric);
-    if (values.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'status-note';
-      empty.textContent = 'No data points to summarize.';
-      content.append(empty);
-      return;
-    }
-
-    const { min, max } = getMetricRange(metric);
-    const { bins, width, decimals } = buildHistogram(values, min, max);
-
-    if (typeof Chart === 'undefined') {
-      const error = document.createElement('p');
-      error.className = 'status-note';
-      error.textContent = 'Chart could not load. Summary values are listed below.';
-      content.append(error);
-    } else {
-      const container = document.createElement('div');
-      container.className = 'dist-chart';
-      const canvas = document.createElement('canvas');
-      canvas.setAttribute('role', 'img');
-      canvas.setAttribute('aria-label', `Histogram of ${label.toLowerCase()} in feet across ${values.length} dredging areas. Summary values follow in the table.`);
-      container.append(canvas);
-      content.append(container);
-      const styles = getComputedStyle(content);
-      const textColor = styles.getPropertyValue('--text').trim();
-      const mutedColor = styles.getPropertyValue('--muted').trim();
-      const gridColor = styles.getPropertyValue('--border').trim();
-      const fmt = value => value.toFixed(decimals).replace('-', '−');
-      const lo = bins[0].start;
-      const hi = bins[bins.length - 1].end;
-      distChart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          datasets: [{
-            label: 'Areas',
-            // Linear x axis with bars centered in each bin, so ticks sit on the bin edges.
-            data: bins.map(bin => ({ x: (bin.start + bin.end) / 2, y: bin.count, start: bin.start, end: bin.end })),
-            // Bars use the same ramp as the map so colors read the same in both places.
-            backgroundColor: bins.map(bin => colorForMetric(metric, (bin.start + bin.end) / 2)),
-            borderColor: mutedColor,
-            borderWidth: 1,
-            barPercentage: 1,
-            categoryPercentage: 1,
-          }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                title: items => `${label}: ${fmt(items[0].raw.start)} to ${fmt(items[0].raw.end)} ft`,
-                label: item => `${item.parsed.y} ${item.parsed.y === 1 ? 'area' : 'areas'}`,
-              },
-            },
-          },
-          scales: {
-            x: {
-              type: 'linear',
-              min: lo,
-              max: hi,
-              offset: false,
-              title: { display: true, text: `${label} (ft)`, color: textColor, font: { size: 11 } },
-              ticks: { color: textColor, font: { size: 10 }, stepSize: width, maxRotation: 0, callback: value => fmt(value) },
-              // Only the zero line is drawn, so gains and losses read as separate sides in Change mode.
-              // Chart.js also calls this for grid lines without a tick, so ctx.tick can be undefined.
-              grid: { color: ctx => ctx.tick && Math.abs(ctx.tick.value) < width / 1000 ? mutedColor : 'transparent', lineWidth: 1.5 },
-            },
-            y: {
-              beginAtZero: true,
-              title: { display: true, text: 'Areas', color: textColor, font: { size: 11 } },
-              ticks: { color: textColor, precision: 0 },
-              grid: { color: gridColor },
-            },
-          },
-        },
-      });
-    }
-
-    const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-    const stats = [
-      ['Areas', String(values.length)],
-      ['Min', `${min.toFixed(2)} ft`],
-      ['Median', `${median(values).toFixed(2)} ft`],
-      ['Mean', `${mean.toFixed(2)} ft`],
-      ['Max', `${max.toFixed(2)} ft`],
-    ];
-    const table = document.createElement('table');
-    table.className = 'dist-stats';
-    const body = table.createTBody();
-    stats.forEach(([name, value]) => {
-      const row = body.insertRow();
-      const th = document.createElement('th');
-      th.scope = 'row';
-      th.textContent = name;
-      row.append(th);
-      row.insertCell().textContent = value;
-    });
-    content.append(table);
-  }
-
-  function wireControls() {
-    document.querySelectorAll('[data-mode]').forEach(button => {
-      button.addEventListener('click', () => {
-        currentMode = button.dataset.mode;
-        document.querySelectorAll('[data-mode]').forEach(b => {
-          b.classList.toggle('active', b === button);
-        });
-        renderDredgingPolygons(dredgingFeatures, {
-          mode: currentMode
-        });
-        renderLegend(currentMode);
-        renderDistribution(currentMode);
-      });
-    });
-  }
-
-</script>
-
 <script src="/static/js/components/navbar.js" defer></script>
 <script src="/static/js/main.js" defer></script>
+<script src="/static/js/pages/dredgingForecast.js" defer></script>
 </body>
 </html>
