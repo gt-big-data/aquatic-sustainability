@@ -254,6 +254,67 @@ def get_flood_risk(job_id):
         return jsonify({"status": "failed"})
 
 
+DREDGING_CACHE_TTL_S = 24 * 3600
+_dredging_memory_cache = {}  # used only when Redis is not connected
+
+
+@bp.route("/dredging/forecast", methods=["GET"])
+def dredging_forecast():
+    """
+    Harbor depth forecast for Anchorage, as GeoJSON (same format as anchorage_forecast.geojson).
+    GET /api/dredging/forecast?date=YYYY-MM-DD
+    The first request for a date downloads 4 surveys from eHydro and runs the model (can take
+    a minute); the result is then cached for 24 h in Redis, or in memory if Redis is unavailable.
+    """
+    date = request.args.get("date", "")
+    try:
+        date = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "date is required, as YYYY-MM-DD"}), 400
+
+    cache_key = f"dredging_forecast_{date}"
+    redis_conn = current_app.redis
+
+    # 1. cached already?
+    cached = None
+    if redis_conn:
+        try:
+            cached = redis_conn.get(cache_key)
+        except Exception as e:
+            print(f"[CACHE READ ERROR] {e}")
+    else:
+        cached = _dredging_memory_cache.get(cache_key)
+    if cached:
+        print(f"[CACHE HIT] Dredging forecast for {date}")
+        return current_app.response_class(cached, mimetype="application/json")
+
+    # 2. not cached: run the model
+    from app.dredging_forecast import forecast, ForecastError  # imported here so torch etc. load only when used
+    try:
+        result = forecast(date)
+    except ForecastError as e:
+        return jsonify({"error": str(e)}), 400          # e.g. no survey 21-32 days before the date
+    except requests.RequestException:
+        current_app.logger.exception("eHydro request failed")
+        return jsonify({"error": "could not reach eHydro to download the surveys, try again later"}), 502
+    except Exception:
+        current_app.logger.exception("Error running dredging forecast")
+        return jsonify({"error": "internal error running the forecast"}), 500
+
+    # 3. save to the cache for next time
+    body = json.dumps(result)
+    if redis_conn:
+        try:
+            redis_conn.setex(cache_key, DREDGING_CACHE_TTL_S, body)
+            print(f"[CACHE SAVE] Dredging forecast for {date}")
+        except Exception as e:
+            print(f"[CACHE SAVE ERROR] {e}")
+    else:
+        _dredging_memory_cache[cache_key] = body
+
+    return current_app.response_class(body, mimetype="application/json")
+
+
 @bp.route("/coral-bleaching", methods=["GET"])
 def coral_bleaching():
     """Return coral-bleaching prediction bundle from GBR model outputs."""
