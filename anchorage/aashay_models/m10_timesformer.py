@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -55,4 +57,6 @@ class TimeSformer(nn.Module):
         return self.head(self.refine(torch.cat([z, stat, seq[:, -1]], 1)))[:, 0]
 
 
-run('m10_timesformer', lambda T: TimeSformer(T.c_seq, T.c_stat), 'seq')
+if __name__ == '__main__':
+    run('m10_timesformer', lambda T: TimeSformer(T.c_seq, T.c_stat), 'seq',
+        save=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'artifacts', 'm10_timesformer.pt'))

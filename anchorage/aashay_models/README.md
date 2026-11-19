@@ -66,3 +66,22 @@ Deep setup: 1,835 training maps (the 367 original windows plus extra train-only 
 - **TimeSformer is now the best deep model** on test, and every deep model except FNO now beats climatology. FNO overfits within ~500 steps (train loss falls to 0.28).
 - **A longer history makes Holt useful.** Smoothing over 12 surveys denoises the current depth, and the trend now gets weight 0.3. Over 4 surveys the trend was pure noise.
 - All results use one seed. Treat differences under ~0.01 ft as noise.
+
+## On the dredging map
+
+`publish_frontend.py` adds the LightGBM ensemble (m02) and TimeSformer (m10) to the platform's dredging page as two extra models in `backend/static/data/anchorage/manifest.json`. It reuses `tools/anchorage`'s footprint, GeoJSON writer, comparison export and verifier, and leaves the XGBoost and physics files untouched. Run `m02_lightgbm.py` and `m10_timesformer.py` first; they save their models to the git-ignored `artifacts/`.
+
+```
+pip install pyproj xgboost threadpoolctl
+python m02_lightgbm.py && python m10_timesformer.py && python publish_frontend.py
+```
+
+The page shows the platform's metric: per-survey test MAE averaged over the 71 test windows, on the platform core (cells observed in ≥80% of training maps, dredged cells included). Persistence reproduces the platform's 0.706.
+
+| model | platform test MAE (ft) |
+|---|---|
+| XGBoost + neighborhoods (Alex) | 0.422 |
+| LightGBM ensemble | 0.459 |
+| TimeSformer | 0.504 |
+| Physics-informed (Alex) | 0.518 |
+| Persistence | 0.706 |

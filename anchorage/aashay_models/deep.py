@@ -1,4 +1,5 @@
 import copy
+import os
 import time
 
 import numpy as np
@@ -87,7 +88,7 @@ def val_mae(T, p, idx):
 
 
 def run(label, build, mode, steps=1500, eval_every=100, lr=5e-4, bs=8, seed=0, wd=0.05, ema=0.995, augment=True,
-        depth='local', extra=None):
+        depth='local', save=None, extra=None):
     t0 = time.time()
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -128,6 +129,9 @@ def run(label, build, mode, steps=1500, eval_every=100, lr=5e-4, bs=8, seed=0, w
                   f'({time.time() - te:.0f}s)', flush=True)
             losses, te = [], time.time()
     avg.load_state_dict(best[1])
+    if save:
+        os.makedirs(os.path.dirname(save), exist_ok=True)
+        torch.save(avg.state_dict(), save)
     preds = {k: predict(avg, T, D.idx[k], mode) for k in ['val', 'test']}
     info = {'params': n_par, 'best_step': best[2], 'steps': steps, 'seed': seed, 'lr': lr, 'wd': wd, 'ema': ema,
             'augment': augment, 'depth': depth, 'train_maps': int(len(tr))}

@@ -1,9 +1,11 @@
+import json
+import os
 import time
 
 import numpy as np
 
 import gbm
-from common import Data, evaluate, tabular, unflatten
+from common import HERE, Data, evaluate, tabular, unflatten
 
 t0 = time.time()
 D = Data()
@@ -24,3 +26,9 @@ clean = lambda p: {k: (v if isinstance(v, str) else float(v)) for k, v in p.item
 evaluate(D, preds, 'm02_lightgbm', {'params': clean(top[0]), 'ensemble': [clean(p) for p in top],
                                     'iters': [m.best_iteration for m in models],
                                     'top_features': [names[i] for i in np.argsort(-imp)[:10]]}, t0)
+
+art = os.path.join(HERE, 'artifacts')
+os.makedirs(art, exist_ok=True)
+for k, m in enumerate(models):
+    m.save_model(os.path.join(art, f'm02_lightgbm_{k}.txt'), num_iteration=m.best_iteration)
+json.dump({'params': [clean(p) for p in top], 'features': names}, open(os.path.join(art, 'm02_lightgbm.json'), 'w'), indent=1)
