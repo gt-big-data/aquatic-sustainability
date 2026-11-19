@@ -19,13 +19,18 @@
   ];
   const state = {
     manifest: null, map: null, overlay: null, hotspots: null, popup: null, prepared: null,
-    mode: 'depth', fitted: false, request: 0, controller: null, cache: new Map(), mapsTimer: null
+    view: 'predicted', opacity: 0.78, comparisons: null, mode: 'change', fitted: false, request: 0, controller: null, cache: new Map(), mapsTimer: null
   };
+  palettes.error = { ...palettes.change, stops: ['#2465a0', '#80bfd0', '#f5f0df', '#e88372', '#b3263e'] };
+  const active = () => state.prepared?.views?.[state.view] || state.prepared;
+  const isError = () => state.view === 'error';
+  const metricLabel = () => isError() ? 'Depth error' : state.mode === 'depth' ? 'Depth' : 'Change';
   const paletteRGB = Object.fromEntries(Object.entries(palettes).map(([metric, palette]) => [
     metric, palette.stops.map(hex => [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)))
   ]));
 
   function colorForMetric(metric, value) {
+    if (isError() && metric === 'change') metric = 'error';
     const palette = palettes[metric];
     const position = Math.max(0, Math.min(1, (value - palette.min) / (palette.max - palette.min))) * (palette.stops.length - 1);
     const index = Math.min(palette.stops.length - 2, Math.floor(position));
@@ -35,12 +40,12 @@
   }
 
   function renderLegend() {
-    const palette = palettes[state.mode];
+    const palette = palettes[isError() ? 'error' : state.mode];
     el('legendGradient').style.background = `linear-gradient(to right, ${palette.stops.join(',')})`;
     set('legendMin', String(palette.min));
     set('legendMax', String(palette.max));
-    set('legendCaption', state.mode === 'depth' ? 'Depth (ft)' : 'Change (ft)');
-    set('legend-description', state.mode === 'depth'
+    set('legendCaption', `${metricLabel()} (ft)`);
+    set('legend-description', isError() ? 'Red: predicted too deep; blue: predicted too shallow. Error = predicted minus observed; fixed -3 to +3 ft.' : state.mode === 'depth'
       ? 'Yellow: shallow · dark blue: deep. Fixed 0–80 ft scale.'
       : 'Red: shallower · blue: deeper. Zero-centered, fixed −3 to +3 ft scale.');
   }
@@ -56,6 +61,11 @@
   function clearForecast(message) {
     clearOverlay();
     state.prepared = null;
+    set('selected-model-mae', '—');
+    set('selected-baseline-mae', '—');
+    set('comparison-note', 'No survey comparison loaded.');
+    for (const button of document.querySelectorAll('[data-view]:not([data-view=predicted])')) button.disabled = true;
+    set('change-summary', 'Loading predicted depth changes…');
     const chart = el('distribution-chart');
     chart.replaceChildren();
     chart.setAttribute('hidden', '');
@@ -119,16 +129,25 @@
     }
     // Compute both summaries once when a file is loaded, never per map feature.
     const hotspots = [...hotspotGroups.values()].map(group => ({ count: group.count, latitude: group.latitude / group.count, longitude: group.longitude / group.count }));
-    return { collection, bounds, hotspots, metrics: { depth: summarize(values.depth, 'depth'), change: summarize(values.change, 'change') } };
+    const changeCounts = {
+      shallower: values.change.filter(value => value <= -1).length,
+      deeper: values.change.filter(value => value >= 1).length
+    };
+    return { collection, bounds, hotspots, changeCounts, metrics: { depth: summarize(values.depth, 'depth'), change: summarize(values.change, 'change') } };
   }
 
   function renderDistribution() {
     const metric = state.mode;
-    const label = metric === 'depth' ? 'Depth' : 'Change';
-    set('distTitle', `${label} distribution`);
-    if (!state.prepared) return;
-    const { collection, metrics } = state.prepared;
+    const label = metricLabel();
+    set('distTitle', `${label} distribution and statistics`);
+    if (!active()) return;
+    const { collection, metrics } = active();
     const count = collection.features.length;
+    const { shallower, deeper } = active().changeCounts;
+    set('change-summary', `${number(shallower)} cells at least 1 ft shallower; ${number(deeper)} at least 1 ft deeper; ${number(count - shallower - deeper)} change by less than 1 ft. ${state.view === 'observed' ? 'Observed changes between surveys; causes are not identified.' : 'Model predictions, not measured changes.'}`);
+    if (isError()) set('change-summary', 'Positive error means the model predicted more water depth than was measured. Blank cells have no target survey measurement.');
+    set('view-heading', isError() ? 'Where did the forecast miss?' : state.view === 'observed' ? 'What the later survey measured' : 'What the model predicted');
+    set('view-description', isError() ? 'Compare red and blue areas with the observed survey.' : state.mode === 'depth' ? 'Water depth below low tide. This is not a navigation chart.' : 'Red = shallowing; white = little change; blue = deepening.');
     const summary = metrics[metric];
     const palette = palettes[metric];
     const bins = summary.bins;
@@ -185,10 +204,13 @@
     const content = document.createElement('div');
     content.className = 'dredging-popup';
     const list = document.createElement('dl');
-    const metadata = state.prepared.collection.properties;
+    const metadata = active().collection.properties;
     const rows = [
-      ['Predicted Depth', feet(feature.getProperty('depth_ft'))],
-      ['Depth Change', feet(feature.getProperty('change_ft'), true)],
+      ['Predicted depth', feet(feature.getProperty('_predicted_depth_ft') ?? feature.getProperty('depth_ft'))],
+      ['Predicted change', feet(feature.getProperty('_predicted_change_ft') ?? feature.getProperty('change_ft'), true)],
+      ['Observed depth', Number.isFinite(feature.getProperty('_observed_depth_ft')) ? feet(feature.getProperty('_observed_depth_ft')) : 'Not surveyed'],
+      ['Observed change', Number.isFinite(feature.getProperty('_observed_change_ft')) ? feet(feature.getProperty('_observed_change_ft'), true) : 'Not surveyed'],
+      ['Forecast error', Number.isFinite(feature.getProperty('_error_ft')) ? feet(feature.getProperty('_error_ft'), true) : 'Unavailable'],
       ['From Survey', date(metadata.from_survey)],
       ['Predicted For', date(metadata.predicted_for)]
     ];
@@ -207,16 +229,16 @@
 
   function mapStyle(feature) {
     const color = colorForMetric(state.mode, feature.getProperty(`${state.mode}_ft`));
-    return { fillColor: color, fillOpacity: 0.86, strokeColor: color, strokeWeight: 0, strokeOpacity: 0, clickable: true };
+    return { fillColor: color, fillOpacity: state.opacity, strokeColor: color, strokeWeight: 0, strokeOpacity: 0, clickable: true };
   }
 
   function renderHotspots() {
     state.hotspots?.setMap(null);
     state.hotspots = null;
-    if (!el('show-hotspots').checked || !state.map || !state.prepared) return;
+    if (isError() || !el('show-hotspots').checked || !state.map || !active()) return;
     const layer = new google.maps.Data({ map: state.map });
     state.hotspots = layer;
-    layer.addGeoJson({ type: 'FeatureCollection', features: state.prepared.hotspots.map(group => ({
+    layer.addGeoJson({ type: 'FeatureCollection', features: active().hotspots.map(group => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [group.longitude, group.latitude] }, properties: { count: group.count }
     })) });
     layer.setStyle({ icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, strokeColor: '#8d1332', fillColor: '#ffbfbc', fillOpacity: 0.95, strokeWeight: 2 }, zIndex: 5 });
@@ -231,13 +253,15 @@
   }
 
   function renderOverlay() {
-    if (!state.map || !state.prepared) return;
+    if (!state.map || !active()) return;
     clearOverlay();
     try {
       const overlay = new google.maps.Data({ map: state.map });
       state.overlay = overlay;
-      overlay.addGeoJson(state.prepared.collection);
+      overlay.addGeoJson(active().collection);
       overlay.setStyle(mapStyle);
+      overlay.addListener('mouseover', event => overlay.overrideStyle(event.feature, { strokeColor: '#ffffff', strokeWeight: 1, strokeOpacity: 1 }));
+      overlay.addListener('mouseout', event => overlay.revertStyle(event.feature));
       renderHotspots();
       overlay.addListener('click', event => {
         state.popup.setContent(predictionContent(event.feature));
@@ -245,11 +269,7 @@
         state.popup.open({ map: state.map });
       });
       if (!state.fitted) {
-        const padding = window.innerWidth > 680
-          ? { top: 40, bottom: 40, left: 40, right: 360 }
-          : 24;
-        state.map.fitBounds(state.prepared.bounds, padding);
-        state.fitted = true;
+        fitChannel();
       }
     } catch (_) {
       clearOverlay();
@@ -257,10 +277,20 @@
     }
   }
 
+  function fitChannel() {
+    if (!state.map || !active()) return;
+    const padding = window.innerWidth > 680
+      ? { top: 40, bottom: 40, left: 40, right: el('filterOverlay').offsetWidth + 40 }
+      : 24;
+    state.map.fitBounds(active().bounds, padding);
+    state.fitted = true;
+  }
+
   function mapUnavailable(message = 'Satellite map unavailable. Forecast statistics and GeoJSON downloads are available below.') {
     clearTimeout(state.mapsTimer);
     set('basemap-status', message);
     el('basemap-status').hidden = false;
+    el('fit-channel').disabled = true;
   }
 
   async function loadMap() {
@@ -283,13 +313,14 @@
         state.map.addListener('click', () => state.popup.close());
         el('basemap-status').hidden = true;
         renderOverlay();
+        el('fit-channel').disabled = !active();
       } catch (_) {
         state.map = null;
         mapUnavailable();
       }
     };
     try {
-      const response = await fetch('/api/config/maps-key');
+      const response = await fetch('/api/config/maps-key', { signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error('Map configuration unavailable.');
       const configuration = await response.json();
       const key = configuration.googleMapsApiKey;
@@ -305,6 +336,58 @@
     }
   }
 
+  async function attachComparisons(prepared, frame, model, url, raw) {
+    const record = state.comparisons?.frames?.find(candidate => candidate.id === frame.id && candidate.from_survey === frame.from_survey && candidate.predicted_for === frame.predicted_for)?.outputs?.[model.id];
+    if (!record || record.forecast_url !== url) return;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    const hash = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+    const pairs = record.origin_target_depths_ft;
+    if (hash !== record.forecast_sha256 || !Array.isArray(pairs) || pairs.length !== prepared.collection.features.length) return;
+    const observed = [], errors = [], absoluteErrors = [], baselineErrors = [];
+    prepared.collection.features.forEach((feature, index) => {
+      const pair = pairs[index];
+      if (!Array.isArray(pair) || pair.length !== 2 || !pair.every(Number.isFinite)) return;
+      const [origin, target] = pair;
+      const predicted = feature.properties.depth_ft;
+      const change = target - origin;
+      const error = predicted - target;
+      Object.assign(feature.properties, { _predicted_depth_ft: predicted, _predicted_change_ft: feature.properties.change_ft,
+        _observed_depth_ft: target, _observed_change_ft: change, _error_ft: error });
+      observed.push({ ...feature, properties: { ...feature.properties, depth_ft: target, change_ft: change } });
+      errors.push({ ...feature, properties: { ...feature.properties, depth_ft: error, change_ft: error } });
+      absoluteErrors.push(Math.abs(error));
+      baselineErrors.push(Math.abs(change));
+    });
+    if (!observed.length) return;
+    const collection = features => ({ ...prepared.collection, features });
+    prepared.views = { observed: prepareCollection(collection(observed), frame), error: prepareCollection(collection(errors), frame) };
+    prepared.comparison = { count: observed.length, total: pairs.length,
+      mae: absoluteErrors.reduce((sum, value) => sum + value, 0) / absoluteErrors.length,
+      baseline: baselineErrors.reduce((sum, value) => sum + value, 0) / baselineErrors.length };
+  }
+
+  function updateComparison() {
+    const comparison = state.prepared?.comparison;
+    for (const button of document.querySelectorAll('[data-view]:not([data-view=predicted])')) button.disabled = !comparison;
+    if (!comparison && state.view !== 'predicted') state.view = 'predicted';
+    document.querySelectorAll('[data-view]').forEach(button => {
+      const selected = button.dataset.view === state.view;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    document.querySelector('[data-mode=depth]').disabled = isError();
+    el('show-hotspots').disabled = isError();
+    set('hotspot-label', state.view === 'observed' ? 'Mark observed shoaling hotspots' : 'Mark predicted shoaling hotspots');
+    if (comparison) {
+      set('selected-model-mae', feet(comparison.mae));
+      set('selected-baseline-mae', feet(comparison.baseline));
+      const delta = comparison.baseline > 0 ? 100 * (1 - comparison.mae / comparison.baseline) : null;
+      set('comparison-note', `${number(comparison.count)} of ${number(comparison.total)} displayed cells have both surveys. ${delta === null ? 'No-change error is zero.' : `${Math.abs(delta).toFixed(1)}% ${delta >= 0 ? 'less' : 'more'} error than no change.`} Selected date only; lower is better.`);
+    } else {
+      set('comparison-note', 'Observed comparison unavailable for this forecast. Predicted view is still available.');
+    }
+  }
+
   async function loadForecast() {
     const index = Number(el('forecast-frame').value);
     const frame = state.manifest.frames[index];
@@ -313,12 +396,16 @@
     const request = ++state.request;
     state.controller?.abort();
     const controller = new AbortController();
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
     state.controller = controller;
     el('forecast-date').value = String(index);
     el('forecast-frame').setAttribute('aria-valuetext', `${date(frame.from_survey)} survey, predicting ${date(frame.predicted_for)}`);
     set('frame-origin', date(frame.from_survey));
     set('frame-predicted-for', date(frame.predicted_for));
     el('forecast-error').hidden = true;
+    el('retry-forecast').hidden = true;
+    el('fit-channel').disabled = true;
     el('distContent').setAttribute('aria-busy', 'true');
     clearForecast('Loading the selected forecast…');
     set('forecast-status', `Loading ${model.label}…`);
@@ -328,17 +415,22 @@
       if (!prepared) {
         const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) throw new Error(`Forecast could not be loaded (${response.status}).`);
-        const collection = await response.json();
+        const raw = await response.text();
+        const collection = JSON.parse(raw);
         if (request !== state.request) return;
         prepared = prepareCollection(collection, frame);
+        await attachComparisons(prepared, frame, model, url, raw);
         state.cache.set(url, prepared);
         // Bound memory while keeping recently explored dates available instantly.
         if (state.cache.size > 6) state.cache.delete(state.cache.keys().next().value);
       }
       if (request !== state.request) return;
       state.prepared = prepared;
+      updateComparison();
+      renderLegend();
       renderDistribution();
       renderOverlay();
+      el('fit-channel').disabled = !state.map;
       set('model-score', model.mae_ft.toFixed(3));
       set('forecast-status', `Historical forecast · ${model.label} · ${number(prepared.collection.features.length)} cells`);
       const download = el('download-geojson');
@@ -346,12 +438,15 @@
       download.download = `anchorage-${model.id}-${frame.from_survey}.geojson`;
       download.setAttribute('aria-disabled', 'false');
     } catch (error) {
-      if (error.name === 'AbortError' || request !== state.request) return;
+      if (request !== state.request || (error.name === 'AbortError' && !timedOut)) return;
       clearForecast('No forecast cells to summarize.');
+      set('change-summary', 'Predicted changes unavailable.');
       set('forecast-status', 'Forecast unavailable');
-      set('forecast-error', `${error.message} Choose another date or reload the page.`);
+      set('forecast-error', timedOut ? 'The forecast request timed out. Retry or choose another date.' : `${error.message} Retry or choose another date.`);
       el('forecast-error').hidden = false;
+      el('retry-forecast').hidden = false;
     } finally {
+      clearTimeout(timeout);
       if (request === state.request) el('distContent').setAttribute('aria-busy', 'false');
     }
   }
@@ -370,6 +465,16 @@
 
   async function initialize() {
     renderLegend();
+    document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+      state.view = button.dataset.view;
+      if (isError()) { state.mode = 'change'; document.querySelectorAll('[data-mode]').forEach(mode => { mode.classList.toggle('active', mode.dataset.mode === 'change'); mode.setAttribute('aria-pressed', String(mode.dataset.mode === 'change')); }); }
+      updateComparison(); renderLegend(); renderDistribution(); renderOverlay();
+    }));
+    el('overlay-opacity').addEventListener('input', () => {
+      state.opacity = Number(el('overlay-opacity').value) / 100;
+      set('opacity-value', `${el('overlay-opacity').value}%`);
+      state.overlay?.setStyle(mapStyle);
+    });
     document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => {
       state.mode = button.dataset.mode;
       document.querySelectorAll('[data-mode]').forEach(candidate => {
@@ -381,7 +486,11 @@
       renderLegend();
       renderDistribution();
     }));
-    const response = await fetch('/static/data/anchorage/manifest.json');
+    const [response, comparisons] = await Promise.all([
+      fetch('/static/data/anchorage/manifest.json', { signal: AbortSignal.timeout(15000) }),
+      fetch('/static/data/anchorage/comparisons.json', { signal: AbortSignal.timeout(8000) }).then(result => result.ok ? result.json() : null).catch(() => null)
+    ]);
+    if (comparisons?.schema_version === 1 && comparisons.kind === 'retrospective_observations') state.comparisons = comparisons;
     if (!response.ok) throw new Error(`Forecast index could not be loaded (${response.status}).`);
     const manifest = await response.json();
     validateManifest(manifest);
@@ -412,6 +521,11 @@
   }
 
   // Forecast data and summaries load even if the map provider is unavailable.
+  el('fit-channel').addEventListener('click', fitChannel);
+  el('retry-forecast').addEventListener('click', () => {
+    if (state.manifest) loadForecast();
+    else window.location.reload();
+  });
   loadMap();
   initialize().catch(error => {
     clearForecast('Forecast preview unavailable.');
@@ -419,5 +533,6 @@
     set('forecast-status', 'Forecast preview unavailable');
     set('forecast-error', error.message);
     el('forecast-error').hidden = false;
+    el('retry-forecast').hidden = false;
   });
 })();

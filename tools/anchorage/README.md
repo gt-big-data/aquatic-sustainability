@@ -1,5 +1,24 @@
 # Anchorage model overlays
 
+## Local retrospective comparison views
+
+After generating forecast overlays, run `python tools/anchorage/export_comparisons.py`
+to build `backend/static/data/anchorage/comparisons.json` from the local survey NPZ.
+This separate artifact supports Predicted / Observed / Error views. Target survey
+depths are used for display and evaluation only, never as model inputs. Original
+forecast GeoJSON files and model weights are unchanged.
+
+Comparisons require exact origin and target survey dates and aligned grid cells.
+Unmeasured targets stay missing. Each observation array is bound to its forecast
+file by SHA-256, so a changed forecast cannot silently reuse stale comparisons.
+Regenerate comparisons after changing the manifest or forecast files. If the
+comparison asset is missing or mismatched, the page keeps forecast-only mode.
+
+The displayed selected-date MAE uses exported (rounded) predictions and the
+intersection of measured origin/target cells in the displayed footprint. It is
+distinct from the overall backtest score. No-change error retains origin depth.
+Error colors show predicted minus observed depth, with red meaning too deep.
+
 The `alex-wang` branch provides separate training scripts and a shared map output for two Anchorage models.
 
 ## Models and measured results
