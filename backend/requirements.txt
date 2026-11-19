@@ -23,3 +23,9 @@ scikit-learn
 newsapi-python
 h3>=4.0
 google-cloud-storage
+# dredging forecast (app/dredging_forecast.py)
+pandas
+scipy
+pyproj
+remotezip
+requests
