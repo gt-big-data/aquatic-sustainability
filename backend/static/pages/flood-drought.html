@@ -819,7 +819,7 @@
           ? `<div>Local rainfall: ${point.local_rain_mm.toFixed(1)} mm</div>`
           : '';
         const info = new google.maps.InfoWindow({
-          content: `<div style="font-family: sans-serif; min-width: 180px; line-height: 1.6;">
+          content: `<div style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 14px; font-weight: 500; min-width: 180px; line-height: 1.6; color: #111827;">
             <strong>${safeSourceName}</strong><br>
             ${riskLabel} · ${probability.toFixed(1)}%<br>
             H3 cell: ${escapeHtml(point.h3 || 'Unavailable')}<br>
