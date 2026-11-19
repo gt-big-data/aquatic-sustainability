@@ -63,6 +63,19 @@ GLOBAL_SMAP = None
 GLOBAL_GPM = None
 GLOBAL_TIMESTAMP = None
 GLOBAL_DATA_LOCK = threading.Lock()
+# One inference at a time per worker: concurrent requests (the page preloads
+# 10 cities at once) would otherwise stack ~450 MB each and OOM the container.
+INFERENCE_LOCK = threading.Lock()
+
+
+def _synthetic_grid(value, shape):
+    """Read-only constant grid backed by a single float (near-zero memory).
+
+    A materialised random grid needs ~1.7 GB per gunicorn worker for GPM and
+    OOM-kills Cloud Run. Callers only slice these arrays, so a broadcast view
+    is enough.
+    """
+    return np.broadcast_to(np.float32(value), shape)
 
 # ---- H3 hexagon config ----
 H3_RES = 5    # ~8.5 km edge, ~250 km² per cell; matches GPM's ~11 km pixels
@@ -179,7 +192,7 @@ def load_global_smap():
         print(f"[GLOBAL SMAP] Loaded cached stack: {GLOBAL_SMAP.shape}")
     elif FAST_START_FLOOD_DATA:
         print("[GLOBAL SMAP] Cache missing — using synthetic data for fast startup.")
-        GLOBAL_SMAP = np.random.uniform(0.1, 0.5, (21, 720, 1440)).astype(np.float32)
+        GLOBAL_SMAP = _synthetic_grid(0.3, (21, 720, 1440))
         print(f"[GLOBAL SMAP] Using synthetic data: {GLOBAL_SMAP.shape}")
     else:
         print("[GLOBAL SMAP] Cache missing — auto-building 21-day stack…")
@@ -191,7 +204,7 @@ def load_global_smap():
             print("[GLOBAL SMAP] WARNING: Could not download SMAP data.")
             print("[GLOBAL SMAP] Using synthetic soil moisture data as fallback.")
             # Create synthetic data (21 days, 720x1440 grid at 0.25°)
-            GLOBAL_SMAP = np.random.uniform(0.1, 0.5, (21, 720, 1440)).astype(np.float32)
+            GLOBAL_SMAP = _synthetic_grid(0.3, (21, 720, 1440))
             print(f"[GLOBAL SMAP] Using synthetic data: {GLOBAL_SMAP.shape}")
 
 def load_global_gpm():
@@ -207,7 +220,7 @@ def load_global_gpm():
         print(f"[GLOBAL GPM] Loaded cached stack: {GLOBAL_GPM.shape}")
     elif FAST_START_FLOOD_DATA:
         print("[GLOBAL GPM] Cache missing — using synthetic data for fast startup.")
-        GLOBAL_GPM = np.random.uniform(0, 5, (32, 1800, 3600)).astype(np.float32)
+        GLOBAL_GPM = _synthetic_grid(2.5, (32, 1800, 3600))
         print(f"[GLOBAL GPM] Using synthetic data: {GLOBAL_GPM.shape}")
     else:
         print("[GLOBAL GPM] Cache missing — building 4-day global stack…")
@@ -219,7 +232,7 @@ def load_global_gpm():
             print("[GLOBAL GPM] WARNING: Could not download GPM data.")
             print("[GLOBAL GPM] Using synthetic precipitation data as fallback.")
             # Create synthetic data (32 time steps, 1800x3600 grid)
-            GLOBAL_GPM = np.random.uniform(0, 5, (32, 1800, 3600)).astype(np.float32)
+            GLOBAL_GPM = _synthetic_grid(2.5, (32, 1800, 3600))
             print(f"[GLOBAL GPM] Using synthetic data: {GLOBAL_GPM.shape}")
 
 def build_global_gpm_4days(day_delay=GPM_DAY_DELAY):
@@ -666,21 +679,27 @@ def run_flood_inference(center_lat, center_lon):
 
         print(f"[INFERENCE] {len(misses)} new hexagons for ({center_lat:.3f}, {center_lon:.3f})")
 
-        valid_locs, batch_precip, batch_soil = [], [], []
-        for loc in misses:
-            out = prepare_inference_data(loc, scaler)
-            if out is not None:
-                p, s = out
-                batch_precip.append(p)
-                batch_soil.append(s)
-                valid_locs.append(loc)
-
-        preds = []
-        with torch.no_grad():
-            for i in range(0, len(batch_precip), INFERENCE_BATCH):
-                pb = torch.stack(batch_precip[i:i + INFERENCE_BATCH]).to(device)
-                sb = torch.stack(batch_soil[i:i + INFERENCE_BATCH]).to(device)
+        # Prepare inputs one batch at a time: each sample is ~8 MB, so building
+        # all 61 up front costs ~500 MB per worker and OOMs Cloud Run.
+        valid_locs, preds = [], []
+        with INFERENCE_LOCK, torch.no_grad():
+            for i in range(0, len(misses), INFERENCE_BATCH):
+                batch_locs, batch_precip, batch_soil = [], [], []
+                for loc in misses[i:i + INFERENCE_BATCH]:
+                    out = prepare_inference_data(loc, scaler)
+                    if out is not None:
+                        p, s = out
+                        batch_precip.append(p)
+                        batch_soil.append(s)
+                        batch_locs.append(loc)
+                if not batch_locs:
+                    continue
+                pb = torch.stack(batch_precip).to(device)
+                sb = torch.stack(batch_soil).to(device)
+                del batch_precip, batch_soil
                 preds.extend(model(pb, sb).cpu().numpy().reshape(-1).tolist())
+                valid_locs.extend(batch_locs)
+                del pb, sb
 
         new_points = {}
         for loc, prob in zip(valid_locs, preds):
