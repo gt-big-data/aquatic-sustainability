@@ -22,3 +22,9 @@ rq
 scikit-learn
 newsapi-python
 h3>=4.0
+# dredging forecast (app/dredging_forecast.py)
+pandas
+scipy
+pyproj
+remotezip
+requests

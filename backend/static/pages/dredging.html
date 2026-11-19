@@ -26,6 +26,10 @@
       <label for="forecast-date">Survey → prediction date</label>
       <select id="forecast-date" disabled aria-describedby="timeline-help"></select>
       <input id="forecast-frame" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Choose the starting survey date" aria-describedby="frame-target timeline-help" />
+      <form id="live-form" class="live-form" hidden>
+        <input id="live-date" type="date" required aria-label="Date to forecast" />
+        <button id="live-compute" type="submit" class="forecast-download">Compute</button>
+      </form>
       <p class="forecast-dates"><span>From survey</span><output id="frame-origin" for="forecast-frame">—</output></p>
       <p class="forecast-dates" id="frame-target"><span>Predicted for</span><strong id="frame-predicted-for">—</strong></p>
       <p id="timeline-help" class="forecast-help">Historical 28-day forecast. Compare it with the later survey; this is not a live navigation chart.</p>
