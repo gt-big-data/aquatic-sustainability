@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dredging · Aquatic Sustainability</title>
+<link rel="stylesheet" href="/static/css/styles.css" />
+<link rel="stylesheet" href="/static/css/dredging-forecast.css" />
+</head>
+<body>
+<div data-navbar-root></div>
+
+<main class="workspace dredging-workspace">
+<section class="map-panel" aria-label="Dredging forecast map and controls">
+  <div class="filter-overlay" id="filterOverlay">
+    <div class="filter-section">
+      <h3>Understand the channel</h3>
+      <p class="forecast-eyebrow">Anchorage Harbor · 10 m survey cells</p>
+    </div>
+
+    <div class="filter-section forecast-controls">
+      <label for="forecast-model">Model</label>
+      <select id="forecast-model" disabled aria-describedby="model-evaluation"></select>
+      <p id="model-evaluation" class="forecast-help">Overall backtest error: <strong id="model-score">—</strong> ft.</p>
+
+      <label for="forecast-date">Survey → prediction date</label>
+      <select id="forecast-date" disabled aria-describedby="timeline-help"></select>
+      <input id="forecast-frame" type="range" min="0" max="0" value="0" step="1" disabled aria-label="Choose the starting survey date" aria-describedby="frame-target timeline-help" />
+      <p class="forecast-dates"><span>From survey</span><output id="frame-origin" for="forecast-frame">—</output></p>
+      <p class="forecast-dates" id="frame-target"><span>Predicted for</span><strong id="frame-predicted-for">—</strong></p>
+      <p id="timeline-help" class="forecast-help">Historical 28-day forecast. Compare it with the later survey; this is not a live navigation chart.</p>
+
+      <label>Compare with the survey</label>
+      <div class="view-buttons" role="group" aria-label="Compare forecast with observed survey">
+        <button type="button" data-view="predicted" class="active" aria-pressed="true">Predicted</button>
+        <button type="button" data-view="observed" aria-pressed="false" disabled>Observed</button>
+        <button type="button" data-view="error" aria-pressed="false" disabled>Error</button>
+      </div>
+
+      <div class="toggle-buttons" role="group" aria-label="Color prediction cells by">
+        <button class="toggle-btn" data-mode="depth" type="button" aria-pressed="false">Depth</button>
+        <button class="toggle-btn active" data-mode="change" type="button" aria-pressed="true">Change</button>
+      </div>
+      <label for="overlay-opacity" class="opacity-label">Overlay opacity <output id="opacity-value" for="overlay-opacity">78%</output></label>
+      <input id="overlay-opacity" type="range" min="10" max="100" step="1" value="78" />
+      <button id="fit-channel" class="forecast-download" type="button" disabled>Fit channel on map</button>
+      <div class="legend" aria-label="Map color legend">
+        <div class="legend-gradient" id="legendGradient"></div>
+        <div class="legend-scale">
+          <span id="legendMin">0</span>
+          <span id="legendCaption" class="legend-caption">Depth (ft)</span>
+          <span id="legendMax">80</span>
+        </div>
+        <p id="legend-description" class="forecast-help"></p>
+      </div>
+      <p id="change-summary" class="forecast-help" role="status">Loading predicted depth changes…</p>
+      <label class="forecast-checkbox"><input id="show-hotspots" type="checkbox" /> <span id="hotspot-label">Mark predicted shoaling hotspots</span></label>
+
+
+
+      <details class="dist-section" id="forecast-distribution">
+        <summary id="distTitle">Depth distribution and statistics</summary>
+        <div id="distContent" aria-busy="true">
+        <p id="distribution-empty" class="forecast-help">Loading the forecast index…</p>
+        <svg id="distribution-chart" viewBox="0 0 300 204" role="img" aria-labelledby="distribution-chart-title distribution-chart-description" hidden></svg>
+        <table class="dist-stats" aria-label="All cells in the selected forecast">
+          <tbody>
+            <tr><th scope="row">Prediction cells</th><td id="cell-count">—</td></tr>
+            <tr><th scope="row">Map footprint</th><td id="distribution-area">—</td></tr>
+            <tr><th scope="row">Min</th><td id="distribution-min">—</td></tr>
+            <tr><th scope="row">Median</th><td id="distribution-median">—</td></tr>
+            <tr><th scope="row">Mean</th><td id="distribution-mean">—</td></tr>
+            <tr><th scope="row">Max</th><td id="distribution-max">—</td></tr>
+          </tbody>
+        </table>
+        <p class="forecast-help">All cells in this forecast; bins stay fixed across dates and models. End bars include values beyond the color scale.</p>
+        </div>
+      </details>
+
+      <a id="download-geojson" class="forecast-download" aria-disabled="true">Download model forecast</a>
+      <p id="forecast-status" class="status-note" role="status" aria-live="polite">Loading historical forecast preview…</p>
+      <p id="forecast-error" class="forecast-error" role="alert" hidden></p>
+      <button id="retry-forecast" class="forecast-download" type="button" hidden>Retry forecast</button>
+      <details class="forecast-details">
+        <summary>About this preview</summary>
+        <p>Depth is positive below low tide. Negative change means shallowing; positive change means deepening.</p>
+        <p>Predicted view shows eligible cells with measured starting depths. Observed and error views show only cells measured in both surveys. Blank areas mean missing data, not safe water.</p>
+        <p>Error is predicted depth minus observed depth. Positive (red) means the model predicted water too deep; negative (blue) means it predicted water too shallow. The selected-date errors compare identical measured cells against retaining the starting depth.</p>
+        <p>MAE measures average absolute error on held-out survey dates; it is not a confidence interval. Forecasts alone do not determine when dredging is required.</p>
+      </details>
+    </div>
+  </div>
+
+  <div id="map" aria-label="Satellite map of predicted channel depths in Anchorage"></div>
+  <div class="map-insight" aria-live="polite">
+    <p class="map-insight-kicker">HISTORICAL SURVEY COMPARISON</p>
+    <h2 id="view-heading">What the model predicted</h2>
+    <p id="view-description">Red = shallowing · white = little change · blue = deepening.</p>
+      <section class="comparison-card" aria-label="Accuracy on the selected survey date">
+        <h4>How close was this forecast?</h4>
+        <div class="comparison-scores">
+          <div><span>Model error</span><strong id="selected-model-mae">—</strong></div>
+          <div><span>No-change error</span><strong id="selected-baseline-mae">—</strong></div>
+        </div>
+        <p id="comparison-note" class="forecast-help">Loading exact-survey comparison…</p>
+      </section>
+    <p class="map-insight-hint">Click a cell to compare its predicted and measured depth.</p>
+  </div>
+  <p id="basemap-status" class="basemap-status" role="status">Loading satellite map…</p>
+</section>
+</main>
+
+<script src="/static/js/components/navbar.js" defer></script>
+<script src="/static/js/main.js" defer></script>
+<script src="/static/js/pages/dredgingForecast.js" defer></script>
+</body>
+</html>

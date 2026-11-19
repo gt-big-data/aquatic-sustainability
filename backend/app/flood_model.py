@@ -1,6 +1,7 @@
 import os
 import pickle
 import json
+import math
 from datetime import datetime, timedelta, date
 
 import numpy as np
@@ -9,6 +10,7 @@ import torch.nn as nn
 import h5py
 import xarray as xr
 import earthaccess
+import h3  # Uber H3 hexagonal indexing (pip install "h3>=4.0")
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import threading
@@ -61,6 +63,19 @@ GLOBAL_SMAP = None
 GLOBAL_GPM = None
 GLOBAL_TIMESTAMP = None
 GLOBAL_DATA_LOCK = threading.Lock()
+
+# ---- H3 hexagon config ----
+H3_RES = 5    # ~8.5 km edge, ~250 km² per cell; matches GPM's ~11 km pixels
+H3_K = 4      # 4 rings around the search cell = 61 hexagons
+
+RISK_COLORS = {
+    "low": "#2ecc71",
+    "medium": "#f1c40f",
+    "warning": "#e67e22",
+    "high": "#e74c3c",
+}
+
+INFERENCE_BATCH = 16  # one sample is ~8 MB; chunking keeps memory sane on Cloud Run
 
 # =====================================================================
 # MODEL ARCHITECTURE
@@ -186,7 +201,7 @@ def load_global_gpm():
     Grid resolution: 0.1° (1800 x 3600)
     """
     global GLOBAL_GPM
-    
+
     if os.path.exists(GPM_GLOBAL_NPY):
         GLOBAL_GPM = np.load(GPM_GLOBAL_NPY)
         print(f"[GLOBAL GPM] Loaded cached stack: {GLOBAL_GPM.shape}")
@@ -210,29 +225,29 @@ def load_global_gpm():
 def build_global_gpm_4days(day_delay=GPM_DAY_DELAY):
     """
     Download and build global GPM precipitation grids for 4 days.
-    
+
     Args:
         day_delay: Number of days to go back from today (uses GPM_DAY_DELAY constant by default)
-    
+
     Returns shape: (32, 1800, 3600) for 32 time steps at 0.1° resolution
     """
     earthdata_login()
-    
+
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).date()
     # Use day_delay parameter to ensure consistency
     most_recent_available = today - timedelta(days=day_delay)
-    
+
     raw_dates = [most_recent_available - timedelta(days=i) for i in range(GPM_N_DAYS)]
     date_list = sorted(raw_dates)
-    
+
     print(f"[GLOBAL GPM] Building for dates: {date_list[0]} to {date_list[-1]}")
-    
+
     all_blocks = []
-    
+
     for d in date_list:
         print(f"[GLOBAL GPM] Processing date: {d}")
         files = search_and_download_gpm_global(d, GPM_DIR)
-        
+
         frames = []
         for fp in files:
             try:
@@ -241,28 +256,28 @@ def build_global_gpm_4days(day_delay=GPM_DAY_DELAY):
             except Exception as e:
                 print(f"[GLOBAL GPM] Error processing {fp}: {e}")
                 continue
-        
+
         if len(frames) == 0:
             print(f"[GLOBAL GPM] No frames for {d}")
             # Fill with zeros
             for _ in range(8):
                 all_blocks.append(np.zeros((1800, 3600), dtype=np.float32))
             continue
-        
+
         blocks_3hr = accumulate_3hr_grids_global(frames)
         all_blocks.extend(blocks_3hr)
-    
+
     stack = np.array(all_blocks[:32])  # Ensure exactly 32
-    
+
     # Pad if necessary
     if len(stack) < 32:
         padding = np.zeros((32 - len(stack), 1800, 3600), dtype=np.float32)
         stack = np.vstack([stack, padding])
-    
+
     os.makedirs(os.path.dirname(GPM_GLOBAL_NPY), exist_ok=True)
     np.save(GPM_GLOBAL_NPY, stack)
     print(f"[GLOBAL GPM] Saved → {GPM_GLOBAL_NPY}")
-    
+
     return stack
 
 def accumulate_3hr_grids_global(frames):
@@ -275,11 +290,11 @@ def accumulate_3hr_grids_global(frames):
         elif len(chunk) > 0:
             # Partial block, still sum what we have
             blocks.append(np.sum(chunk, axis=0))
-    
+
     # Ensure we have 8 blocks per day
     while len(blocks) < 8:
         blocks.append(np.zeros_like(blocks[0]) if blocks else np.zeros((1800, 3600), dtype=np.float32))
-    
+
     return blocks[:8]
 
 def ensure_global_data_loaded():
@@ -307,13 +322,13 @@ def ensure_global_data_loaded():
 # =====================================================================
 
 def earthdata_login():
-    # Import here to avoid circular imports
+    
     from app.global_gpm_loader import ensure_earthdata_auth
+
     
-    # Ensure .netrc file exists with credentials
     ensure_earthdata_auth()
+
     
-    # Login using netrc file
     print("[GPM] Logging in to Earthdata via netrc…")
     auth_result = earthaccess.login(strategy="netrc")
     print(f"[GPM] Login result: {auth_result}")
@@ -326,7 +341,7 @@ def search_and_download_gpm_global(gpm_date: date, out_dir: str):
         os.makedirs(out_dir, exist_ok=True)
 
     try:
-        # Ensure authentication before downloading
+       
         from app.global_gpm_loader import ensure_earthdata_auth
         ensure_earthdata_auth()
         print("[GPM] Logging in to Earthdata via netrc before download…")
@@ -406,7 +421,7 @@ def extract_precip_window(precip_da: xr.DataArray, target_lat: float, target_lon
 
     return out
 
-# Precomputed grid lookup arrays (avoids recomputing on every inference point)
+
 _SMAP_LAT_VALS = np.linspace(90, -90, 720)
 _SMAP_LON_VALS = np.linspace(-180, 180, 1440)
 _GPM_LAT_VALS  = np.linspace(90, -90, 1800)
@@ -418,42 +433,42 @@ def extract_precip_from_global(lat: float, lon: float, size=250):
     Returns array of shape (32, 250, 250)
     """
     global GLOBAL_GPM
-    
+
     if GLOBAL_GPM is None:
         raise RuntimeError("GLOBAL_GPM not loaded")
-    
+
     iy = int(np.argmin(np.abs(_GPM_LAT_VALS - lat)))
     ix = int(np.argmin(np.abs(_GPM_LON_VALS - lon)))
-    
+
     half = size // 2
-    
+
     y0 = iy - half
     y1 = iy + half
     x0 = ix - half
     x1 = ix + half
-    
+
     precip_grids = []
-    
+
     for t in range(32):  # 32 time steps
         window = np.zeros((size, size), dtype=np.float32)
+
         
-        # Extract from global grid
         src_y0 = max(0, y0)
         src_y1 = min(1800, y1)
         src_x0 = max(0, x0)
         src_x1 = min(3600, x1)
+
         
-        # Target coordinates in output window
         tgt_y0 = max(0, -y0)
         tgt_y1 = tgt_y0 + (src_y1 - src_y0)
         tgt_x0 = max(0, -x0)
         tgt_x1 = tgt_x0 + (src_x1 - src_x0)
-        
+
         src = GLOBAL_GPM[t, src_y0:src_y1, src_x0:src_x1]
         window[tgt_y0:tgt_y1, tgt_x0:tgt_x1] = src
-        
+
         precip_grids.append(window)
-    
+
     return np.array(precip_grids)
 
 # =====================================================================
@@ -468,7 +483,7 @@ def prepare_inference_data(location, scaler):
     lat = location["lat"]
     lon = location["lon"]
 
-    # Extract SMAP data from global cache
+    
     iy = int(np.argmin(np.abs(_SMAP_LAT_VALS - lat)))
     ix = int(np.argmin(np.abs(_SMAP_LON_VALS - lon)))
 
@@ -500,26 +515,26 @@ def prepare_inference_data(location, scaler):
 
         soil_grids.append(window)
 
-    # Extract GPM data from global cache
+  
     precip_grids = extract_precip_from_global(lat, lon, size=PRECIP_GRID_SIZE)
 
     if len(precip_grids) < 32:
         print(f"[WARNING] Only got {len(precip_grids)}/32 precipitation time steps")
         return None
 
-    # Process precipitation — vectorized: scale all 32 grids in one call
+    # Process precipitation 
     p_arr = precip_grids[:32]  # (32, H, W)
     orig_shape = p_arr.shape
     p_scaled = scaler.transform(p_arr.reshape(-1, 1)).reshape(orig_shape)
     precip_tensor = torch.tensor(p_scaled[:, np.newaxis, :, :], dtype=torch.float32)
 
-    # Process soil moisture — vectorized: scale all 21 grids in one call
+    # Process soil moisture 
     s_arr = np.stack(soil_grids[:21])          # (21, H, W)
     masks = ~np.isnan(s_arr)
     s_filled = np.nan_to_num(s_arr, nan=0.0)
     orig_s_shape = s_filled.shape
     s_scaled = scaler.transform(s_filled.reshape(-1, 1)).reshape(orig_s_shape)
-    # Stack scaled + mask channels: (21, 2, H, W)
+    
     soil_tensor = torch.tensor(
         np.stack([s_scaled, masks.astype(np.float32)], axis=1), dtype=torch.float32
     )
@@ -527,10 +542,8 @@ def prepare_inference_data(location, scaler):
     return precip_tensor, soil_tensor
 
 # =====================================================================
-# RADIAL GRID GENERATION
+# GRID GENERATION
 # =====================================================================
-
-import math
 
 EARTH_R_KM = 6371.0
 RINGS_KM = [5, 10, 20, 30, 40, 60, 80]
@@ -554,6 +567,7 @@ def offset_latlon(lat_deg, lon_deg, distance_km, bearing_deg):
     return math.degrees(lat2), (math.degrees(lon2) + 540) % 360 - 180
 
 def build_radial_locations(center_lat, center_lon):
+    """LEGACY: circular 56-point grid. No longer used by run_flood_inference."""
     locations = []
     idx = 0
     for r in RINGS_KM:
@@ -567,99 +581,137 @@ def build_radial_locations(center_lat, center_lon):
             idx += 1
     return locations
 
+def build_h3_locations(center_lat, center_lon, res=H3_RES, k=H3_K):
+    """
+    Build a hexagonal disk of H3 cells around the search point.
+    Returns (center_cell_id, [location dicts]) where each location has the
+    cell id plus the lat/lon of the cell center (used to sample the data grids).
+    """
+    center_cell = h3.latlng_to_cell(center_lat, center_lon, res)
+    locations = []
+    for cell in h3.grid_disk(center_cell, k):
+        lat, lon = h3.cell_to_latlng(cell)
+        locations.append({"name": cell, "h3": cell, "lat": lat, "lon": lon})
+    return center_cell, locations
+
 # =====================================================================
 # INFERENCE ENTRYPOINT
 # =====================================================================
 
-# Cache TTL: results are valid for the rest of the UTC day (stale after midnight).
-_FLOOD_CACHE_TTL_SECONDS = 86400  # 24 h — refreshed each new day
 
-def _flood_cache_key(center_lat: float, center_lon: float) -> str:
-    """Redis key scoped to the UTC date so results auto-expire each day."""
+_FLOOD_CACHE_TTL_SECONDS = 86400  
+
+def _cell_cache_key(cell: str) -> str:
+    """Per-hexagon Redis key scoped to the UTC date so results auto-expire daily."""
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
-    # Round to 3 decimal places so trivially-different floats share a cache entry.
-    return f"flood_inference:{round(center_lat, 3)}:{round(center_lon, 3)}:{date_str}"
+    return f"flood_cell:{H3_RES}:{cell}:{date_str}"
 
+def _risk_label(p: float) -> str:
+    if p >= 0.75:
+        return "high"
+    if p >= 0.5:
+        return "warning"
+    if p >= 0.3:
+        return "medium"
+    return "low"
+
+def _local_rain_mm(lat: float, lon: float) -> float:
+    """4-day rainfall at the cell's own GPM pixel (gives real per-cell variation)."""
+    iy = int(np.argmin(np.abs(_GPM_LAT_VALS - lat)))
+    ix = int(np.argmin(np.abs(_GPM_LON_VALS - lon)))
+    return float(GLOBAL_GPM[:, iy, ix].sum())
+
+def _make_point(loc, prob):
+    cell = loc["h3"]
+    risk = _risk_label(prob)
+    return {
+        "h3": cell,
+        "lat": loc["lat"],
+        "lon": loc["lon"],
+        "prob": prob,
+        "risk": risk,
+        "color": RISK_COLORS[risk],
+        "local_rain_mm": round(_local_rain_mm(loc["lat"], loc["lon"]), 2),
+        # Leaflet order: [lat, lng]
+        "boundary": [[lat, lng] for lat, lng in h3.cell_to_boundary(cell)],
+    }
 
 def run_flood_inference(center_lat, center_lon):
     """
-    Run the DualCNNLSTM model on a 56-point radial grid around (center_lat, center_lon).
+    Run the DualCNNLSTM model on an H3 hexagon disk around (center_lat, center_lon).
 
-    Results are cached in Redis for the current UTC day so that repeated calls
-    (e.g. from the regional page-load loop) return instantly after the first run.
+    Each hexagon is cached individually in Redis for the UTC day, so overlapping
+    searches only compute hexagons that have not been seen before.
     """
-    # ── Try Redis cache first ────────────────────────────────────────────────
-    cache_key = _flood_cache_key(center_lat, center_lon)
+    center_cell, locations = build_h3_locations(center_lat, center_lon)
+    results = {}  # cell id -> point dict
+
+  
     if redis_conn is not None:
         try:
-            cached = redis_conn.get(cache_key)
-            if cached:
-                print(f"[FLOOD CACHE] HIT {cache_key}")
-                return json.loads(cached)
+            cached = redis_conn.mget([_cell_cache_key(l["h3"]) for l in locations])
+            for loc, raw in zip(locations, cached):
+                if raw:
+                    results[loc["h3"]] = json.loads(raw)
+            print(f"[FLOOD CACHE] {len(results)}/{len(locations)} cells cached")
         except Exception as e:
             print(f"[FLOOD CACHE] Redis read error (continuing without cache): {e}")
 
-    # ── Full model inference ─────────────────────────────────────────────────
-    model, scaler = get_model_and_scaler()
-    ensure_global_data_loaded()  # load once before processing all points
+    misses = [l for l in locations if l["h3"] not in results]
 
-    locations = build_radial_locations(center_lat, center_lon)
 
-    batch_precip = []
-    batch_soil = []
-    valid_locs = []
+    if misses:
+        model, scaler = get_model_and_scaler()
+        ensure_global_data_loaded()  
 
-    print(f"[INFERENCE] Processing {len(locations)} radial points for ({center_lat:.3f}, {center_lon:.3f})")
-    for loc in locations:
-        result = prepare_inference_data(loc, scaler)
-        if result is not None:
-            p, s = result
-            batch_precip.append(p)
-            batch_soil.append(s)
-            valid_locs.append(loc)
+        print(f"[INFERENCE] {len(misses)} new hexagons for ({center_lat:.3f}, {center_lon:.3f})")
 
-    if not batch_precip:
+        valid_locs, batch_precip, batch_soil = [], [], []
+        for loc in misses:
+            out = prepare_inference_data(loc, scaler)
+            if out is not None:
+                p, s = out
+                batch_precip.append(p)
+                batch_soil.append(s)
+                valid_locs.append(loc)
+
+        preds = []
+        with torch.no_grad():
+            for i in range(0, len(batch_precip), INFERENCE_BATCH):
+                pb = torch.stack(batch_precip[i:i + INFERENCE_BATCH]).to(device)
+                sb = torch.stack(batch_soil[i:i + INFERENCE_BATCH]).to(device)
+                preds.extend(model(pb, sb).cpu().numpy().reshape(-1).tolist())
+
+        new_points = {}
+        for loc, prob in zip(valid_locs, preds):
+            new_points[loc["h3"]] = _make_point(loc, float(prob))
+        results.update(new_points)
+
+      
+        if redis_conn is not None and new_points:
+            try:
+                pipe = redis_conn.pipeline()
+                for cell, pt in new_points.items():
+                    pipe.setex(_cell_cache_key(cell), _FLOOD_CACHE_TTL_SECONDS, json.dumps(pt))
+                pipe.execute()
+                print(f"[FLOOD CACHE] STORED {len(new_points)} cells")
+            except Exception as e:
+                print(f"[FLOOD CACHE] Redis write error (result not cached): {e}")
+
+  
+    points = [results[l["h3"]] for l in locations if l["h3"] in results]
+
+    if not points:
         return {
             "center": {"lat": center_lat, "lon": center_lon},
+            "center_cell": center_cell,
             "points": [],
-            "error": "No valid data extracted"
+            "error": "No valid data extracted",
         }
 
-    precip_batch = torch.stack(batch_precip).to(device)
-    soil_batch   = torch.stack(batch_soil).to(device)
-
-    with torch.no_grad():
-        preds = model(precip_batch, soil_batch).cpu().numpy().reshape(-1)
-
-    points = []
-    for loc, prob in zip(valid_locs, preds):
-        p = float(prob)
-        if p >= 0.75:
-            risk = "high"
-        elif p >= 0.5:
-            risk = "warning"
-        elif p >= 0.3:
-            risk = "medium"
-        else:
-            risk = "low"
-        points.append({
-            "lat": loc["lat"],
-            "lon": loc["lon"],
-            "prob": p,
-            "risk": risk,
-        })
-
-    result = {
+    return {
         "center": {"lat": center_lat, "lon": center_lon},
+        "center_cell": center_cell,
+        "h3_res": H3_RES,
         "points": points,
     }
-
-    # ── Store in Redis cache ─────────────────────────────────────────────────
-    if redis_conn is not None:
-        try:
-            redis_conn.setex(cache_key, _FLOOD_CACHE_TTL_SECONDS, json.dumps(result))
-            print(f"[FLOOD CACHE] STORED {cache_key}")
-        except Exception as e:
-            print(f"[FLOOD CACHE] Redis write error (result not cached): {e}")
-
-    return result

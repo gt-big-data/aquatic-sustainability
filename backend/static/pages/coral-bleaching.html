@@ -345,6 +345,30 @@
     font-size: 10px;
     color: #9ca3af;
   }
+  .trend-panel {
+    position: absolute;
+    top: 70px;
+    left: 10px;
+    z-index: 10;
+    width: min(360px, calc(100% - 390px));
+    box-sizing: border-box;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text);
+    box-shadow: 0 4px 12px rgba(0,0,0,.2);
+  }
+  .trend-panel h3 { margin: 0 0 8px; font-size: 15px; }
+  .trend-panel p { margin: 6px 0; font-size: 12px; }
+  .trend-chart { position: relative; height: 180px; width: 100%; margin-bottom: 16px; }
+  .trend-panel .trend-note { color: var(--muted); }
+  .trend-panel table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .trend-panel th, .trend-panel td { padding: 3px 0; text-align: left; }
+  @media (max-width: 760px) {
+    .trend-panel { width: calc(100% - 20px); }
+    .filter-overlay { top: 450px; max-height: 220px; width: calc(100% - 40px); box-sizing: border-box; }
+  }
 </style>
 </head>
 <body>
@@ -423,10 +447,16 @@
   </div>
 </div>
 
+<aside class="trend-panel" aria-labelledby="trendTitle">
+  <h3 id="trendTitle">Predicted Bleaching Risk</h3>
+  <p id="trendLocation" aria-live="polite">Select a reef location to view its trend.</p>
+  <div id="trendContent"></div>
+</aside>
 <div id="map"></div>
 </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   const METRIC_KEYS = ["risk_score", "tsa_dhw_last", "filled_sst_c"];
 
@@ -646,6 +676,127 @@
     return true;
   }
 
+  function reefTrendPoints(bundle, modelName, reefIndex, weekIndex) {
+    const end = Date.parse(bundle.weeks[weekIndex] + 'T00:00:00Z');
+    const start = end - 14 * 24 * 60 * 60 * 1000;
+    return bundle.weeks.flatMap((date, w) => {
+      const time = Date.parse(date + 'T00:00:00Z');
+      if (time < start || time > end) return [];
+      const value = bundle.models[modelName].risk_score[reefIndex][w];
+      return [{ date, time, value: Number.isFinite(value) ? value : null }];
+    });
+  }
+
+  let trendChart = null;
+
+  function renderTrend() {
+    const location = document.getElementById('trendLocation');
+    const content = document.getElementById('trendContent');
+    const i = state.openMarkerIndex;
+    if (trendChart) {
+      trendChart.destroy();
+      trendChart = null;
+    }
+    content.replaceChildren();
+    if (i === null) {
+      location.textContent = 'Select a reef location to view its trend.';
+      return;
+    }
+    const reef = state.bundle.centroids[i];
+    location.textContent = `${reef.name} · ${state.model.toUpperCase()}`;
+    const points = reefTrendPoints(state.bundle, state.model, i, state.weekIndex);
+    const end = Date.parse(state.bundle.weeks[state.weekIndex] + 'T00:00:00Z');
+    const start = end - 14 * 86400000;
+    const iso = time => new Date(time).toISOString().slice(0, 10);
+    const note = document.createElement('p');
+    note.className = 'trend-note';
+    note.textContent = `${iso(start)} – ${iso(end)}`;
+    content.append(note);
+
+    if (typeof Chart === 'undefined') {
+      const error = document.createElement('p');
+      error.textContent = 'Chart could not load. Prediction values are listed below.';
+      content.append(error);
+    } else {
+      const container = document.createElement('div');
+      container.className = 'trend-chart';
+      const canvas = document.createElement('canvas');
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', 'Predicted bleaching risk over the two weeks ending at the selected week. Exact values follow in the table.');
+      container.append(canvas);
+      content.append(container);
+      const styles = getComputedStyle(content);
+      const color = styles.getPropertyValue('--coral-accent-color').trim();
+      const textColor = styles.getPropertyValue('--text').trim();
+      const gridColor = styles.getPropertyValue('--border').trim();
+      trendChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: 'Predicted bleaching risk',
+            data: points.map(point => ({ x: point.time, y: point.value })),
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 2,
+            pointRadius: 4,
+            clip: 8,
+            tension: 0,
+            spanGaps: false,
+            segment: {
+              borderColor: ctx => ctx.p1.parsed.x - ctx.p0.parsed.x > 7 * 86400000 ? 'transparent' : color,
+            },
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          layout: { padding: { top: 8, right: 8, bottom: 0, left: 8 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: items => iso(items[0].parsed.x),
+                label: item => `Risk score: ${item.parsed.y.toFixed(3)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: 'linear', min: start, max: end,
+              ticks: { color: textColor, stepSize: 7 * 86400000, callback: value => iso(value).slice(5), maxRotation: 0 },
+              grid: { display: false },
+            },
+            y: {
+              min: 0, max: 1,
+              ticks: { color: textColor, stepSize: .5, callback: value => value.toFixed(1) },
+              grid: { color: gridColor },
+            },
+          },
+        },
+      });
+    }
+    const table = document.createElement('table');
+    const header = table.createTHead().insertRow();
+    for (const label of ['Date', 'Risk Score']) {
+      const th = document.createElement('th');
+      th.scope = 'col'; th.textContent = label; header.append(th);
+    }
+    const body = table.createTBody();
+    for (const point of points) {
+      const row = body.insertRow();
+      row.insertCell().textContent = point.date;
+      row.insertCell().textContent = point.value === null ? 'No data' : point.value.toFixed(3);
+    }
+    content.append(table);
+    if (points.filter(p => p.value !== null).length < 2) {
+      const message = document.createElement('p');
+      message.className = 'trend-note';
+      message.textContent = 'Not enough history in this window to draw a trend. Move the week slider forward to see more samples.';
+      content.append(message);
+    }
+  }
+
   function render() {
     if (!state.bundle) return;
     const model = state.bundle.models[state.model];
@@ -662,7 +813,6 @@
     renderLegend();
     document.getElementById('weekLabel').textContent = state.bundle.weeks[state.weekIndex];
 
-    // Auto-refresh an open popup so its numbers stay in sync.
     if (state.openMarkerIndex !== null && state.infoWindow) {
       const i = state.openMarkerIndex;
       if (isVisible(i)) {
@@ -672,6 +822,7 @@
         state.openMarkerIndex = null;
       }
     }
+    renderTrend();
   }
 
   function wireControls() {
@@ -762,7 +913,7 @@
     map.fitBounds(bounds, 60);
 
     state.infoWindow = new google.maps.InfoWindow();
-    state.infoWindow.addListener('closeclick', () => { state.openMarkerIndex = null; });
+    state.infoWindow.addListener('closeclick', () => { state.openMarkerIndex = null; renderTrend(); });
 
     state.markers = state.bundle.centroids.map((c, i) => {
       const marker = new google.maps.Marker({
@@ -775,6 +926,7 @@
         state.openMarkerIndex = i;
         state.infoWindow.setContent(popupHtml(i, state.weekIndex));
         state.infoWindow.open(map, marker);
+        renderTrend();
       });
       return marker;
     });
@@ -782,6 +934,7 @@
     map.addListener('click', () => {
       if (state.infoWindow) state.infoWindow.close();
       state.openMarkerIndex = null;
+      renderTrend();
     });
 
     document.getElementById('statusNote').textContent =

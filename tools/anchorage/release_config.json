@@ -1,0 +1,14 @@
+{
+  "config": {
+    "cells_per_window": 10000,
+    "feature_set": "details",
+    "rate_target": true,
+    "parameters": {
+      "huber_slope": 0.5
+    }
+  },
+  "seeds": [
+    42,
+    43
+  ]
+}

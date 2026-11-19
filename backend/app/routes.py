@@ -266,6 +266,7 @@ def coral_bleaching():
         return jsonify({"error": "Coral bleaching data unavailable", "details": str(e)}), 503
 
 
+
 @bp.route("/health")
 def health():
     """Simple health check endpoint."""

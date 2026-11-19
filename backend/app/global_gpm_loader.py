@@ -7,6 +7,7 @@ import numpy as np
 import xarray as xr
 from datetime import datetime, timedelta
 import earthaccess
+from pathlib import Path
 
 # Output cache
 GPM_GLOBAL_NPY = "./data/global_gpm_4days.npy"
@@ -22,15 +23,16 @@ TARGET_LONS = np.linspace(-180, 180, 3600)     # ascending
 # ================================================================
 
 def ensure_earthdata_auth():
-    """Create .netrc on Cloud Run using env vars."""
+    """Create platform-appropriate netrc file using Earthdata credentials."""
     username = os.environ.get("EARTHDATA_USERNAME")
     password = os.environ.get("EARTHDATA_PASSWORD")
     
     if not username or not password:
         raise RuntimeError("Missing Earthdata credentials: EARTHDATA_USERNAME and EARTHDATA_PASSWORD must be set")
 
-    # Cloud Run allows writing inside /root or /tmp
-    NETRC_PATH = "/root/.netrc"
+    # Windows netrc filename is "_netrc"; Unix/Linux uses ".netrc".
+    netrc_filename = "_netrc" if os.name == "nt" else ".netrc"
+    NETRC_PATH = str(Path.home() / netrc_filename)
 
     # Standard .netrc format: NO indentation
     content = (
@@ -47,12 +49,12 @@ def ensure_earthdata_auth():
 
     os.chmod(NETRC_PATH, 0o600)
 
-    print(f"[AUTH] .netrc file created at {NETRC_PATH}")
+    print(f"[AUTH] netrc file created at {NETRC_PATH}")
     print(f"[AUTH] Username: {username}")
     
     # Verify file was created
     if os.path.exists(NETRC_PATH):
-        print(f"[AUTH] .netrc file exists and has correct permissions")
+        print(f"[AUTH] netrc file exists and has correct permissions")
 
 def download_last_4days_gpm(out_dir="./data/gpm_download/"):
     """
