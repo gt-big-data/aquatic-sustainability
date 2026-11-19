@@ -19,4 +19,4 @@ chmod 600 "$NETRC"
 # Use a default port if PORT is unset
 PORT="${PORT:-8080}"
 
-exec gunicorn --bind :"$PORT" --workers 2 --threads 8 --timeout 0 run:app
+exec gunicorn --bind :"$PORT" --workers 1 --threads 8 --timeout 0 run:app

@@ -32,13 +32,15 @@ steps:
       - '--port'
       - '5000'
       - '--memory'
-      - '512Mi'
+      - '2Gi'
       - '--cpu'
       - '1'
       - '--max-instances'
       - '10'
       - '--timeout'
       - '300'
+      - '--update-env-vars'
+      - 'FAST_START_FLOOD_DATA=0'
       # Optional: Uncomment if CPU boost is available in your region
       # - '--cpu-boost'
       # Uncomment and set substitution variables to pass env vars during build

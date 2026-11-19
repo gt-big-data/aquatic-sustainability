@@ -56,13 +56,106 @@ FAST_START_FLOOD_DATA = os.environ.get(
     "1" if RUNNING_ON_CLOUD_RUN else "0",
 ).lower() in {"1", "true", "yes", "on"}
 
-# Global precipitation cache path
+# Global precipitation cache path (legacy, built on dev machines)
 GPM_GLOBAL_NPY = os.path.join(DATA_CACHE_DIR, "global_gpm_4days.npy")
+
+# Cropped regional inputs built daily by scripts/build_flood_data.py. On Cloud
+# Run they are fetched from gs://$FLOOD_DATA_BUCKET/$FLOOD_DATA_BLOB.
+REGION_NPZ = os.path.join(DATA_CACHE_DIR, "flood_region.npz")
+FLOOD_DATA_BUCKET = os.environ.get("FLOOD_DATA_BUCKET", "")
+FLOOD_DATA_BLOB = os.environ.get("FLOOD_DATA_BLOB", "flood/region_latest.npz")
+
+# Global grid coordinates the model's window maths is written against.
+# Row 0 is the NORTH edge. Raw GPM files are stored south-first, so GPM data is
+# flipped into this orientation when it is built (see orient_gpm_frame).
+_SMAP_LAT_VALS = np.linspace(90, -90, 720)
+_SMAP_LON_VALS = np.linspace(-180, 180, 1440)
+_GPM_LAT_VALS  = np.linspace(90, -90, 1800)
+_GPM_LON_VALS  = np.linspace(-180, 180, 3600)
+
+# ---- Region the flood map serves (Southeast Asia) ----
+# Data is cropped to this box plus the model's input window, so the server
+# holds ~80 MB instead of ~1 GB of global grids. Points outside it still run,
+# but their input windows are zero-filled beyond the crop.
+REGION_LAT_MIN, REGION_LAT_MAX = -15.0, 30.0
+REGION_LON_MIN, REGION_LON_MAX = 90.0, 145.0
+
+
+def _crop_box(lat_vals, lon_vals, window):
+    """Global (row0, row1, col0, col1) covering REGION plus half a window."""
+    half = window // 2
+    rows = sorted(int(np.argmin(np.abs(lat_vals - v))) for v in (REGION_LAT_MIN, REGION_LAT_MAX))
+    cols = sorted(int(np.argmin(np.abs(lon_vals - v))) for v in (REGION_LON_MIN, REGION_LON_MAX))
+    return (
+        max(0, rows[0] - half - 1), min(len(lat_vals), rows[1] + half + 2),
+        max(0, cols[0] - half - 1), min(len(lon_vals), cols[1] + half + 2),
+    )
+
+
+GPM_CROP = _crop_box(_GPM_LAT_VALS, _GPM_LON_VALS, PRECIP_GRID_SIZE)
+SMAP_CROP = _crop_box(_SMAP_LAT_VALS, _SMAP_LON_VALS, SOIL_GRID_SIZE)
+
+
+def orient_gpm_frame(arr):
+    """Flip a raw GPM grid (south-first rows) to north-first rows."""
+    return arr[::-1, :]
+
+
+class RegionGrid:
+    """A (T, h, w) stack covering a sub-box of a global grid.
+
+    `box` takes GLOBAL row/col indexes and returns a zero-filled (T, ...) array,
+    matching how the old global-array code padded windows past the grid edge.
+    """
+
+    def __init__(self, data, row0, col0):
+        self.data = data
+        self.row0 = int(row0)
+        self.col0 = int(col0)
+
+    @property
+    def shape(self):
+        return self.data.shape
+
+    def box(self, y0, y1, x0, x1):
+        t, h, w = self.data.shape
+        out = np.zeros((t, y1 - y0, x1 - x0), dtype=np.float32)
+        sy0, sy1 = max(y0, self.row0), min(y1, self.row0 + h)
+        sx0, sx1 = max(x0, self.col0), min(x1, self.col0 + w)
+        if sy1 > sy0 and sx1 > sx0:
+            out[:, sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = self.data[
+                :, sy0 - self.row0:sy1 - self.row0, sx0 - self.col0:sx1 - self.col0
+            ]
+        return out
+
+
+def crop_to_region(stack, crop):
+    """Crop a global (T, H, W) stack (array or memmap) to a RegionGrid."""
+    r0, r1, c0, c1 = crop
+    return RegionGrid(np.ascontiguousarray(stack[:, r0:r1, c0:c1], dtype=np.float32), r0, c0)
+
+
+def synthetic_region(value, n_steps, crop):
+    r0, r1, c0, c1 = crop
+    return RegionGrid(_synthetic_grid(value, (n_steps, r1 - r0, c1 - c0)), r0, c0)
 
 GLOBAL_SMAP = None
 GLOBAL_GPM = None
 GLOBAL_TIMESTAMP = None
 GLOBAL_DATA_LOCK = threading.Lock()
+# One inference at a time per worker: concurrent requests (the page preloads
+# 10 cities at once) would otherwise stack ~450 MB each and OOM the container.
+INFERENCE_LOCK = threading.Lock()
+
+
+def _synthetic_grid(value, shape):
+    """Read-only constant grid backed by a single float (near-zero memory).
+
+    A materialised random grid needs ~1.7 GB per gunicorn worker for GPM and
+    OOM-kills Cloud Run. Callers only slice these arrays, so a broadcast view
+    is enough.
+    """
+    return np.broadcast_to(np.float32(value), shape)
 
 # ---- H3 hexagon config ----
 H3_RES = 5    # ~8.5 km edge, ~250 km² per cell; matches GPM's ~11 km pixels
@@ -172,55 +265,88 @@ def get_model_and_scaler():
 # GLOBAL DATA LOADERS
 # =====================================================================
 
+def _download_region_npz():
+    """Fetch the latest cropped inputs from Cloud Storage into REGION_NPZ."""
+    from google.cloud import storage  # imported lazily: only needed on Cloud Run
+
+    tmp = f"{REGION_NPZ}.{os.getpid()}.tmp"
+    blob = storage.Client().bucket(FLOOD_DATA_BUCKET).blob(FLOOD_DATA_BLOB)
+    blob.download_to_filename(tmp)
+    os.replace(tmp, REGION_NPZ)
+    print(f"[FLOOD DATA] Downloaded gs://{FLOOD_DATA_BUCKET}/{FLOOD_DATA_BLOB}")
+
+
+def _load_region_npz(path):
+    """Load GPM + SMAP RegionGrids written by scripts/build_flood_data.py."""
+    global GLOBAL_GPM, GLOBAL_SMAP
+    with np.load(path) as z:
+        GLOBAL_GPM = RegionGrid(z["gpm"], z["gpm_row0"], z["gpm_col0"])
+        GLOBAL_SMAP = RegionGrid(z["smap"], z["smap_row0"], z["smap_col0"])
+        built_at = str(z["built_at"])
+    print(f"[FLOOD DATA] Loaded {path} (built {built_at}): "
+          f"GPM {GLOBAL_GPM.shape}, SMAP {GLOBAL_SMAP.shape}")
+    age_days = (datetime.utcnow() - datetime.fromisoformat(built_at)).days
+    if age_days >= 2:
+        print(f"[FLOOD DATA] WARNING: inputs are {age_days} days old — is the daily build job running?")
+
+
+def load_region_data():
+    """Load real cropped inputs if available. Returns True on success."""
+    if FLOOD_DATA_BUCKET:
+        try:
+            _download_region_npz()
+        except Exception as e:
+            print(f"[FLOOD DATA] ERROR downloading from gs://{FLOOD_DATA_BUCKET}/{FLOOD_DATA_BLOB}: {e}")
+    if os.path.exists(REGION_NPZ):
+        try:
+            _load_region_npz(REGION_NPZ)
+            return True
+        except Exception as e:
+            print(f"[FLOOD DATA] ERROR reading {REGION_NPZ}: {e}")
+    return False
+
+
 def load_global_smap():
     global GLOBAL_SMAP
     if os.path.exists(SMAP_GLOBAL_NPY):
-        GLOBAL_SMAP = np.load(SMAP_GLOBAL_NPY)
-        print(f"[GLOBAL SMAP] Loaded cached stack: {GLOBAL_SMAP.shape}")
+        GLOBAL_SMAP = crop_to_region(np.load(SMAP_GLOBAL_NPY, mmap_mode="r"), SMAP_CROP)
+        print(f"[GLOBAL SMAP] Loaded cached stack, cropped to {GLOBAL_SMAP.shape}")
     elif FAST_START_FLOOD_DATA:
-        print("[GLOBAL SMAP] Cache missing — using synthetic data for fast startup.")
-        GLOBAL_SMAP = np.random.uniform(0.1, 0.5, (21, 720, 1440)).astype(np.float32)
-        print(f"[GLOBAL SMAP] Using synthetic data: {GLOBAL_SMAP.shape}")
+        print("[GLOBAL SMAP] ERROR: no real soil-moisture data — using constant placeholder.")
+        GLOBAL_SMAP = synthetic_region(0.3, SMAP_N_DAYS, SMAP_CROP)
     else:
         print("[GLOBAL SMAP] Cache missing — auto-building 21-day stack…")
         try:
-            GLOBAL_SMAP = build_global_smap_21days()
-            print(f"[GLOBAL SMAP] Built stack: {GLOBAL_SMAP.shape}")
+            GLOBAL_SMAP = crop_to_region(build_global_smap_21days(), SMAP_CROP)
+            print(f"[GLOBAL SMAP] Built stack, cropped to {GLOBAL_SMAP.shape}")
         except Exception as e:
-            print(f"[GLOBAL SMAP] ERROR building stack: {e}")
-            print("[GLOBAL SMAP] WARNING: Could not download SMAP data.")
-            print("[GLOBAL SMAP] Using synthetic soil moisture data as fallback.")
-            # Create synthetic data (21 days, 720x1440 grid at 0.25°)
-            GLOBAL_SMAP = np.random.uniform(0.1, 0.5, (21, 720, 1440)).astype(np.float32)
-            print(f"[GLOBAL SMAP] Using synthetic data: {GLOBAL_SMAP.shape}")
+            print(f"[GLOBAL SMAP] ERROR building stack: {e} — using constant placeholder.")
+            GLOBAL_SMAP = synthetic_region(0.3, SMAP_N_DAYS, SMAP_CROP)
 
 def load_global_gpm():
     """
-    Load or build global GPM precipitation grids for the last 4 days.
-    Each day has 8 3-hour blocks, resulting in 32 time steps.
-    Grid resolution: 0.1° (1800 x 3600)
+    Load or build GPM precipitation for the last 4 days (32 3-hour blocks),
+    cropped to the served region.
     """
     global GLOBAL_GPM
 
     if os.path.exists(GPM_GLOBAL_NPY):
-        GLOBAL_GPM = np.load(GPM_GLOBAL_NPY)
-        print(f"[GLOBAL GPM] Loaded cached stack: {GLOBAL_GPM.shape}")
+        # Legacy global caches were saved south-first; flip to north-first.
+        stack = np.load(GPM_GLOBAL_NPY, mmap_mode="r")[:, ::-1, :]
+        GLOBAL_GPM = crop_to_region(stack, GPM_CROP)
+        print(f"[GLOBAL GPM] Loaded cached stack, cropped to {GLOBAL_GPM.shape}")
     elif FAST_START_FLOOD_DATA:
-        print("[GLOBAL GPM] Cache missing — using synthetic data for fast startup.")
-        GLOBAL_GPM = np.random.uniform(0, 5, (32, 1800, 3600)).astype(np.float32)
-        print(f"[GLOBAL GPM] Using synthetic data: {GLOBAL_GPM.shape}")
+        print("[GLOBAL GPM] ERROR: no real precipitation data — using constant placeholder.")
+        GLOBAL_GPM = synthetic_region(2.5, 32, GPM_CROP)
     else:
         print("[GLOBAL GPM] Cache missing — building 4-day global stack…")
         try:
-            GLOBAL_GPM = build_global_gpm_4days(day_delay=GPM_DAY_DELAY)
-            print(f"[GLOBAL GPM] Built stack: {GLOBAL_GPM.shape}")
+            stack = build_global_gpm_4days(day_delay=GPM_DAY_DELAY)  # south-first, like the cache
+            GLOBAL_GPM = crop_to_region(stack[:, ::-1, :], GPM_CROP)
+            print(f"[GLOBAL GPM] Built stack, cropped to {GLOBAL_GPM.shape}")
         except Exception as e:
-            print(f"[GLOBAL GPM] ERROR building stack: {e}")
-            print("[GLOBAL GPM] WARNING: Could not download GPM data.")
-            print("[GLOBAL GPM] Using synthetic precipitation data as fallback.")
-            # Create synthetic data (32 time steps, 1800x3600 grid)
-            GLOBAL_GPM = np.random.uniform(0, 5, (32, 1800, 3600)).astype(np.float32)
-            print(f"[GLOBAL GPM] Using synthetic data: {GLOBAL_GPM.shape}")
+            print(f"[GLOBAL GPM] ERROR building stack: {e} — using constant placeholder.")
+            GLOBAL_GPM = synthetic_region(2.5, 32, GPM_CROP)
 
 def build_global_gpm_4days(day_delay=GPM_DAY_DELAY):
     """
@@ -312,9 +438,10 @@ def ensure_global_data_loaded():
         if GLOBAL_TIMESTAMP is not None and (now - GLOBAL_TIMESTAMP).total_seconds() <= 86400:
             return
 
-        print("[GLOBAL CACHE] Reloading global SMAP and GPM…")
-        load_global_smap()
-        load_global_gpm()
+        print("[GLOBAL CACHE] Reloading SMAP and GPM…")
+        if not load_region_data():
+            load_global_smap()
+            load_global_gpm()
         GLOBAL_TIMESTAMP = now
 
 # =====================================================================
@@ -422,54 +549,18 @@ def extract_precip_window(precip_da: xr.DataArray, target_lat: float, target_lon
     return out
 
 
-_SMAP_LAT_VALS = np.linspace(90, -90, 720)
-_SMAP_LON_VALS = np.linspace(-180, 180, 1440)
-_GPM_LAT_VALS  = np.linspace(90, -90, 1800)
-_GPM_LON_VALS  = np.linspace(-180, 180, 3600)
-
 def extract_precip_from_global(lat: float, lon: float, size=250):
     """
     Extract precipitation windows from GLOBAL_GPM for a specific location.
     Returns array of shape (32, 250, 250)
     """
-    global GLOBAL_GPM
-
     if GLOBAL_GPM is None:
         raise RuntimeError("GLOBAL_GPM not loaded")
 
     iy = int(np.argmin(np.abs(_GPM_LAT_VALS - lat)))
     ix = int(np.argmin(np.abs(_GPM_LON_VALS - lon)))
-
     half = size // 2
-
-    y0 = iy - half
-    y1 = iy + half
-    x0 = ix - half
-    x1 = ix + half
-
-    precip_grids = []
-
-    for t in range(32):  # 32 time steps
-        window = np.zeros((size, size), dtype=np.float32)
-
-        
-        src_y0 = max(0, y0)
-        src_y1 = min(1800, y1)
-        src_x0 = max(0, x0)
-        src_x1 = min(3600, x1)
-
-        
-        tgt_y0 = max(0, -y0)
-        tgt_y1 = tgt_y0 + (src_y1 - src_y0)
-        tgt_x0 = max(0, -x0)
-        tgt_x1 = tgt_x0 + (src_x1 - src_x0)
-
-        src = GLOBAL_GPM[t, src_y0:src_y1, src_x0:src_x1]
-        window[tgt_y0:tgt_y1, tgt_x0:tgt_x1] = src
-
-        precip_grids.append(window)
-
-    return np.array(precip_grids)
+    return GLOBAL_GPM.box(iy - half, iy + half, ix - half, ix + half)
 
 # =====================================================================
 # DATA PROCESSING FOR INFERENCE
@@ -494,26 +585,7 @@ def prepare_inference_data(location, scaler):
     x0 = ix - half
     x1 = ix + half
 
-    soil_grids = []
-    for day in range(SMAP_N_DAYS):
-        sm = GLOBAL_SMAP[day]
-
-        window = np.zeros((SOIL_GRID_SIZE, SOIL_GRID_SIZE), dtype=np.float32)
-
-        src = sm[
-            max(0, y0):min(720, y1),
-            max(0, x0):min(1440, x1)
-        ]
-
-        dy0 = max(0, -y0)
-        dx0 = max(0, -x0)
-
-        window[
-            dy0:dy0 + src.shape[0],
-            dx0:dx0 + src.shape[1]
-        ] = src
-
-        soil_grids.append(window)
+    soil_grids = list(GLOBAL_SMAP.box(y0, y1, x0, x1)[:SMAP_N_DAYS])
 
   
     precip_grids = extract_precip_from_global(lat, lon, size=PRECIP_GRID_SIZE)
@@ -619,7 +691,7 @@ def _local_rain_mm(lat: float, lon: float) -> float:
     """4-day rainfall at the cell's own GPM pixel (gives real per-cell variation)."""
     iy = int(np.argmin(np.abs(_GPM_LAT_VALS - lat)))
     ix = int(np.argmin(np.abs(_GPM_LON_VALS - lon)))
-    return float(GLOBAL_GPM[:, iy, ix].sum())
+    return float(GLOBAL_GPM.box(iy, iy + 1, ix, ix + 1).sum())
 
 def _make_point(loc, prob):
     cell = loc["h3"]
@@ -666,21 +738,27 @@ def run_flood_inference(center_lat, center_lon):
 
         print(f"[INFERENCE] {len(misses)} new hexagons for ({center_lat:.3f}, {center_lon:.3f})")
 
-        valid_locs, batch_precip, batch_soil = [], [], []
-        for loc in misses:
-            out = prepare_inference_data(loc, scaler)
-            if out is not None:
-                p, s = out
-                batch_precip.append(p)
-                batch_soil.append(s)
-                valid_locs.append(loc)
-
-        preds = []
-        with torch.no_grad():
-            for i in range(0, len(batch_precip), INFERENCE_BATCH):
-                pb = torch.stack(batch_precip[i:i + INFERENCE_BATCH]).to(device)
-                sb = torch.stack(batch_soil[i:i + INFERENCE_BATCH]).to(device)
+        # Prepare inputs one batch at a time: each sample is ~8 MB, so building
+        # all 61 up front costs ~500 MB per worker and OOMs Cloud Run.
+        valid_locs, preds = [], []
+        with INFERENCE_LOCK, torch.no_grad():
+            for i in range(0, len(misses), INFERENCE_BATCH):
+                batch_locs, batch_precip, batch_soil = [], [], []
+                for loc in misses[i:i + INFERENCE_BATCH]:
+                    out = prepare_inference_data(loc, scaler)
+                    if out is not None:
+                        p, s = out
+                        batch_precip.append(p)
+                        batch_soil.append(s)
+                        batch_locs.append(loc)
+                if not batch_locs:
+                    continue
+                pb = torch.stack(batch_precip).to(device)
+                sb = torch.stack(batch_soil).to(device)
+                del batch_precip, batch_soil
                 preds.extend(model(pb, sb).cpu().numpy().reshape(-1).tolist())
+                valid_locs.extend(batch_locs)
+                del pb, sb
 
         new_points = {}
         for loc, prob in zip(valid_locs, preds):

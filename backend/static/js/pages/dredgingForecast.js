@@ -19,7 +19,8 @@
   ];
   const state = {
     manifest: null, map: null, overlay: null, hotspots: null, popup: null, prepared: null,
-    view: 'predicted', opacity: 0.78, comparisons: null, mode: 'change', fitted: false, request: 0, controller: null, cache: new Map(), mapsTimer: null
+    view: 'predicted', opacity: 0.78, comparisons: null, mode: 'change', fitted: false, request: 0, controller: null, cache: new Map(), mapsTimer: null,
+    live: false, liveUrl: null
   };
   palettes.error = { ...palettes.change, stops: ['#2465a0', '#80bfd0', '#f5f0df', '#e88372', '#b3263e'] };
   const active = () => state.prepared?.views?.[state.view] || state.prepared;
@@ -388,7 +389,93 @@
     }
   }
 
+  // ---- Live forecast: any date, computed on the server by the refill + ConvLSTM model ----
+  const LIVE_MODEL_ID = 'convlstm';
+  const LIVE_TIMEOUT_MS = 300000;   // the first request for a date downloads 4 surveys from eHydro
+
+  function setLiveMode(on) {
+    state.live = on;
+    el('live-form').hidden = !on;
+    el('forecast-model').disabled = on;
+    if (on) {
+      if ([...el('forecast-model').options].some(option => option.value === LIVE_MODEL_ID)) el('forecast-model').value = LIVE_MODEL_ID;
+      el('forecast-date').value = 'live';
+      set('timeline-help', 'Live forecast with the refill + ConvLSTM model: it downloads the latest surveys from eHydro, so the first request for a date can take a minute. No later survey exists to compare with yet.');
+      el('live-date').focus();
+    } else {
+      set('timeline-help', 'Historical 28-day forecast. Compare it with the later survey; this is not a live navigation chart.');
+    }
+  }
+
+  async function loadLive(event) {
+    event?.preventDefault();
+    const target = el('live-date').value;
+    if (!target) return;
+    const request = ++state.request;
+    state.controller?.abort();
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, LIVE_TIMEOUT_MS);
+    state.controller = controller;
+    const model = state.manifest.models.find(candidate => candidate.id === LIVE_MODEL_ID);
+    el('live-compute').disabled = true;
+    el('live-compute').textContent = 'Computing…';
+    el('forecast-error').hidden = true;
+    el('retry-forecast').hidden = true;
+    el('fit-channel').disabled = true;
+    el('distContent').setAttribute('aria-busy', 'true');
+    set('frame-origin', '—');
+    set('frame-predicted-for', date(target));
+    clearForecast('Computing the live forecast…');
+    set('forecast-status', `Computing the forecast for ${date(target)}. The first time for a date this can take a minute.`);
+    try {
+      const response = await fetch(`/api/dredging/forecast?date=${encodeURIComponent(target)}`, { signal: controller.signal });
+      const raw = await response.text();
+      let collection;
+      try { collection = JSON.parse(raw); } catch (_) { collection = {}; }
+      if (!response.ok) throw new Error(collection.error || `The live forecast failed (${response.status}).`);
+      if (request !== state.request) return;
+      const info = collection.properties || {};
+      const prepared = prepareCollection(collection, { from_survey: info.from_survey, predicted_for: info.predicted_for });
+      state.prepared = prepared;
+      state.view = 'predicted';
+      updateComparison();
+      set('comparison-note', 'Live forecast: no later survey exists yet to compare with.');
+      renderLegend();
+      renderDistribution();
+      renderOverlay();
+      el('fit-channel').disabled = !state.map;
+      set('frame-origin', date(info.from_survey));
+      set('model-score', model ? model.mae_ft.toFixed(3) : '—');
+      set('forecast-status', `Live forecast · Refill + ConvLSTM · ${number(prepared.collection.features.length)} cells · inputs ${(info.inputs || []).map(date).join(', ')}`);
+      if (info.warning) {
+        set('forecast-error', `Note: ${info.warning}`);
+        el('forecast-error').hidden = false;
+      }
+      const download = el('download-geojson');
+      if (state.liveUrl) URL.revokeObjectURL(state.liveUrl);
+      state.liveUrl = URL.createObjectURL(new Blob([raw], { type: 'application/geo+json' }));
+      download.href = state.liveUrl;
+      download.download = `anchorage-convlstm-live-${info.predicted_for}.geojson`;
+      download.setAttribute('aria-disabled', 'false');
+    } catch (error) {
+      if (request !== state.request || (error.name === 'AbortError' && !timedOut)) return;
+      clearForecast('No forecast cells to summarize.');
+      set('change-summary', 'Predicted changes unavailable.');
+      set('forecast-status', 'Live forecast unavailable');
+      set('forecast-error', timedOut ? 'The live forecast took too long. Try again in a moment.' : error.message);
+      el('forecast-error').hidden = false;
+      el('retry-forecast').hidden = false;
+    } finally {
+      clearTimeout(timeout);
+      el('live-compute').disabled = false;
+      el('live-compute').textContent = 'Compute';
+      if (request === state.request) el('distContent').setAttribute('aria-busy', 'false');
+    }
+  }
+
   async function loadForecast() {
+    if (state.live) setLiveMode(false);
     const index = Number(el('forecast-frame').value);
     const frame = state.manifest.frames[index];
     const model = state.manifest.models.find(candidate => candidate.id === el('forecast-model').value);
@@ -507,6 +594,12 @@
       option.textContent = `${date(frame.from_survey)} → ${date(frame.predicted_for)}`;
       el('forecast-date').append(option);
     });
+    const liveOption = document.createElement('option');
+    liveOption.value = 'live';
+    liveOption.textContent = 'Any date (live forecast)…';
+    el('forecast-date').append(liveOption);
+    el('live-date').value = manifest.frames[manifest.frames.length - 1].predicted_for;
+    el('live-form').addEventListener('submit', loadLive);
     el('forecast-frame').max = String(manifest.frames.length - 1);
     el('forecast-frame').value = String(manifest.frames.length - 1);
     for (const id of ['forecast-model', 'forecast-date', 'forecast-frame']) el(id).disabled = false;
@@ -514,6 +607,7 @@
     el('show-hotspots').addEventListener('change', renderHotspots);
     el('forecast-frame').addEventListener('input', loadForecast);
     el('forecast-date').addEventListener('change', () => {
+      if (el('forecast-date').value === 'live') { setLiveMode(true); return; }
       el('forecast-frame').value = el('forecast-date').value;
       loadForecast();
     });
@@ -523,7 +617,8 @@
   // Forecast data and summaries load even if the map provider is unavailable.
   el('fit-channel').addEventListener('click', fitChannel);
   el('retry-forecast').addEventListener('click', () => {
-    if (state.manifest) loadForecast();
+    if (state.live) loadLive();
+    else if (state.manifest) loadForecast();
     else window.location.reload();
   });
   loadMap();
