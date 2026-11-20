@@ -1,0 +1,19 @@
+{
+ "model": "m05_eof_reduced_rank",
+ "val_mae": 0.5796350836753845,
+ "val_hot_mae": 0.5963733196258545,
+ "test_mae": 0.5220080614089966,
+ "test_hot_mae": 0.6031890511512756,
+ "test_rmse": 0.771834671497345,
+ "test_median_ae": 0.36256852746009827,
+ "test_bias": -0.04137938842177391,
+ "test_auroc": 0.8581670881613609,
+ "test_ap": 0.6372257484457106,
+ "test_vs_persistence_pct": 25.227516174316406,
+ "seconds": 42,
+ "kx": 16,
+ "ky": 16,
+ "alpha": 10,
+ "selection": "leave-one-year-out CV on train",
+ "depth_input": "local (15x15) relative depth"
+}

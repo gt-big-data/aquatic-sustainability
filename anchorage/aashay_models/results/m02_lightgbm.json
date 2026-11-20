@@ -1,0 +1,69 @@
+{
+ "model": "m02_lightgbm",
+ "val_mae": 0.547698974609375,
+ "val_hot_mae": 0.6441987752914429,
+ "test_mae": 0.44714707136154175,
+ "test_hot_mae": 0.4615655541419983,
+ "test_rmse": 0.6677245497703552,
+ "test_median_ae": 0.32149869203567505,
+ "test_bias": 0.00746811181306839,
+ "test_auroc": 0.8939284599151412,
+ "test_ap": 0.7223700948746241,
+ "test_vs_persistence_pct": 35.95061492919922,
+ "seconds": 438,
+ "params": {
+  "num_leaves": 31.0,
+  "min_data_in_leaf": 100.0,
+  "feature_fraction": 0.9,
+  "bagging_fraction": 0.8,
+  "lambda_l2": 10.0,
+  "objective": "huber",
+  "target": "resid"
+ },
+ "ensemble": [
+  {
+   "num_leaves": 31.0,
+   "min_data_in_leaf": 100.0,
+   "feature_fraction": 0.9,
+   "bagging_fraction": 0.8,
+   "lambda_l2": 10.0,
+   "objective": "huber",
+   "target": "resid"
+  },
+  {
+   "num_leaves": 31.0,
+   "min_data_in_leaf": 100.0,
+   "feature_fraction": 0.5,
+   "bagging_fraction": 1.0,
+   "lambda_l2": 1.0,
+   "objective": "huber",
+   "target": "raw"
+  },
+  {
+   "num_leaves": 127.0,
+   "min_data_in_leaf": 1500.0,
+   "feature_fraction": 0.7,
+   "bagging_fraction": 0.8,
+   "lambda_l2": 10.0,
+   "objective": "huber",
+   "target": "resid"
+  }
+ ],
+ "iters": [
+  253,
+  478,
+  185
+ ],
+ "top_features": [
+  "clim_harm_nb",
+  "clim_harm",
+  "d3",
+  "clim_season",
+  "nb9",
+  "col",
+  "nb_trend15",
+  "nb5",
+  "d1",
+  "row"
+ ]
+}

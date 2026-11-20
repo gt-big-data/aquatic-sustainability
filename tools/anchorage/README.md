@@ -92,6 +92,8 @@ The default release contains six historical **28-day hindcasts**, each made from
 
 `publish_overlays.py` registers adapters in `ADAPTERS` and writes `backend/static/data/anchorage/manifest.json`. The manifest lists models as `{id, label, mae_ft}` and frames as `{id, from_survey, predicted_for, outputs}`. `outputs` maps model IDs to local GeoJSON URLs. The adjacent `evaluation.json` records training scores, feature names, XGBoost split gain and physics coefficients and checkpoints. To add a model, supply its trainer, input loader and prediction function, then register its artifact and model ID. The map reads the model list from the manifest.
 
+`anchorage/aashay_models/publish_frontend.py` adds two more models (LightGBM ensemble and TimeSformer) to the same manifest, using this folder's footprint, GeoJSON writer, comparison exporter and verifier. `publish_overlays.py` rewrites the manifest with only its own adapters, so re-run `publish_frontend.py` afterwards to keep them; the page works either way.
+
 Every GeoJSON follows the attachment's exact property keys:
 
 ```json

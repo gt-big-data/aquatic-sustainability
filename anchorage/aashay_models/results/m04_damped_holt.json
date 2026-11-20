@@ -1,0 +1,20 @@
+{
+ "model": "m04_damped_holt",
+ "val_mae": 0.6012923717498779,
+ "val_hot_mae": 0.7262134552001953,
+ "test_mae": 0.4965510070323944,
+ "test_hot_mae": 0.5431483387947083,
+ "test_rmse": 0.7455273270606995,
+ "test_median_ae": 0.34756648540496826,
+ "test_bias": 0.003943145740777254,
+ "test_auroc": 0.8727398858617392,
+ "test_ap": 0.6327071667170054,
+ "test_vs_persistence_pct": 28.873992919921875,
+ "seconds": 466,
+ "alpha": 0.7,
+ "beta": 0.5,
+ "phi": 0.5,
+ "clim_weight": 0.9,
+ "trend_weight": 0.3,
+ "history_maps": 12
+}
