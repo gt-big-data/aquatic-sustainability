@@ -212,6 +212,8 @@
       ['Observed depth', Number.isFinite(feature.getProperty('_observed_depth_ft')) ? feet(feature.getProperty('_observed_depth_ft')) : 'Not surveyed'],
       ['Observed change', Number.isFinite(feature.getProperty('_observed_change_ft')) ? feet(feature.getProperty('_observed_change_ft'), true) : 'Not surveyed'],
       ['Forecast error', Number.isFinite(feature.getProperty('_error_ft')) ? feet(feature.getProperty('_error_ft'), true) : 'Unavailable'],
+      ['No-change prediction', Number.isFinite(feature.getProperty('_origin_depth_ft')) ? feet(feature.getProperty('_origin_depth_ft')) : 'Unavailable'],
+      ['No-change error', Number.isFinite(feature.getProperty('_baseline_error_ft')) ? feet(feature.getProperty('_baseline_error_ft'), true) : 'Unavailable'],
       ['From Survey', date(metadata.from_survey)],
       ['Predicted For', date(metadata.predicted_for)]
     ];
@@ -337,13 +339,23 @@
     }
   }
 
+  async function forecastHashMatches(raw, expected) {
+    // Git converts Windows CRLF to Linux LF on deployment. Accept only those
+    // equivalent line endings; any change to values/order still fails closed.
+    const lf = raw.replace(/\r\n/g, '\n');
+    for (const candidate of new Set([raw, lf, lf.replace(/\n/g, '\r\n')])) {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(candidate));
+      const hash = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+      if (hash === expected) return true;
+    }
+    return false;
+  }
+
   async function attachComparisons(prepared, frame, model, url, raw) {
     const record = state.comparisons?.frames?.find(candidate => candidate.id === frame.id && candidate.from_survey === frame.from_survey && candidate.predicted_for === frame.predicted_for)?.outputs?.[model.id];
     if (!record || record.forecast_url !== url) return;
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-    const hash = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
     const pairs = record.origin_target_depths_ft;
-    if (hash !== record.forecast_sha256 || !Array.isArray(pairs) || pairs.length !== prepared.collection.features.length) return;
+    if (!await forecastHashMatches(raw, record.forecast_sha256) || !Array.isArray(pairs) || pairs.length !== prepared.collection.features.length) return;
     const observed = [], errors = [], absoluteErrors = [], baselineErrors = [];
     prepared.collection.features.forEach((feature, index) => {
       const pair = pairs[index];
@@ -353,7 +365,8 @@
       const change = target - origin;
       const error = predicted - target;
       Object.assign(feature.properties, { _predicted_depth_ft: predicted, _predicted_change_ft: feature.properties.change_ft,
-        _observed_depth_ft: target, _observed_change_ft: change, _error_ft: error });
+        _observed_depth_ft: target, _observed_change_ft: change, _error_ft: error,
+        _origin_depth_ft: origin, _baseline_error_ft: origin - target });
       observed.push({ ...feature, properties: { ...feature.properties, depth_ft: target, change_ft: change } });
       errors.push({ ...feature, properties: { ...feature.properties, depth_ft: error, change_ft: error } });
       absoluteErrors.push(Math.abs(error));
@@ -383,7 +396,7 @@
       set('selected-model-mae', feet(comparison.mae));
       set('selected-baseline-mae', feet(comparison.baseline));
       const delta = comparison.baseline > 0 ? 100 * (1 - comparison.mae / comparison.baseline) : null;
-      set('comparison-note', `${number(comparison.count)} of ${number(comparison.total)} displayed cells have both surveys. ${delta === null ? 'No-change error is zero.' : `${Math.abs(delta).toFixed(1)}% ${delta >= 0 ? 'less' : 'more'} error than no change.`} Selected date only; lower is better.`);
+      set('comparison-note', `${number(comparison.count)} of ${number(comparison.total)} displayed cells have both surveys. ${delta === null ? 'No-change error is zero.' : `${Math.abs(delta).toFixed(1)}% ${delta >= 0 ? 'less' : 'more'} error than no change.`} Average absolute errors for this date; lower is better.`);
     } else {
       set('comparison-note', 'Observed comparison unavailable for this forecast. Predicted view is still available.');
     }
